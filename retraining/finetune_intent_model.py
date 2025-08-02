@@ -70,6 +70,7 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 # 需要确保unique_intents在load_data函数执行后可用
 dataset, intent2id, id2intent = load_data("../data/intent_train.csv")
 num_labels = len(intent2id)  # 动态获取类别数
+print("训练时num_labels值:", num_labels)  # 必须输出7，否则代码仍有问题
 
 # 加载模型（序列分类任务）
 model = AutoModelForSequenceClassification.from_pretrained(
@@ -152,7 +153,14 @@ trainer = Trainer(
 # 开始训练
 trainer.train()
 
-# 7. 保存最终模型和分词器
-model.save_pretrained("./final_intent_model")
+# 调试：打印训练后模型的配置（关键验证）
+print("训练后模型num_labels:", trainer.model.config.num_labels)  # 应输出7
+print("训练后模型id2label长度:", len(trainer.model.config.id2label))  # 应输出7
+# todo 这里生成的模型num_labels和id2label长度不一致，
+# 7. 保存最终模型和分词器（强制更新配置）
+model_to_save = trainer.model
+# 手动设置num_labels（确保与id2label长度一致）
+model_to_save.config.num_labels = len(id2intent)  # 显式设置为7
+model_to_save.save_pretrained("./final_intent_model")
 tokenizer.save_pretrained("./final_intent_model")
 print("模型训练完成并保存至 ./final_intent_model")
