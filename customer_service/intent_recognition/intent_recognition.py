@@ -13,16 +13,17 @@ class IntentRecognizer:
     意图识别器类
     """
 
-    def __init__(self, model_name='facebook/bart-large-mnli', intents: List[str] = None):
+    def __init__(self, model_name='facebook/bart-large-mnli',
+                 model_path: str = None,
+                 intents: List[str] = None):
         """
         初始化意图识别器
 
         Args:
             model_name (str): 预训练模型名称或路径
-            intent_mapping (List[str]): 意图ID到意图名称的映射
+            model_path (str): 本地微调模型路径（优先于model_name）
+            intents (List[str]): 自定义意图列表（可选）
         """
-        # 1. 加载零样本分类模型
-        self.classifier = pipeline("zero-shot-classification", model=model_name)
         # 定义默认客服场景意图（可根据实际需求修改）
         self.default_intents = [
             "查询订单状态",
@@ -34,8 +35,27 @@ class IntentRecognizer:
             "查询优惠活动",
             "其他问题"
         ]
-        # 2. 定义意图（可根据场景自定义）
-        self.intents = intents if intents else self.default_intents
+        # 1. 优先加载本地微调模型（序列分类任务）
+        if model_path:
+            self.classifier = pipeline(
+                "text-classification",  # 微调模型是序列分类任务
+                model=model_path,
+                tokenizer=model_path,  # 分词器与模型同路径
+                return_all_scores=True  # 返回所有类别的预测分数
+            )
+            # 从模型配置中自动获取意图标签（7个，与训练时一致）
+            self.intents = [
+                self.classifier.model.config.id2label[i]
+                for i in range(len(self.classifier.model.config.id2label))
+            ]
+        # 2. 否则加载预训练零样本模型
+        else:
+            self.classifier = pipeline(
+                "zero-shot-classification",
+                model=model_name
+            )
+            self.intents = intents if intents else self.default_intents
+
         # 3. 定义关键词规则（作为模型的补充）
         self.keyword_rules = {
             "查询订单发货时间或物流状态": ["订单", "发货", "物流", "快递", "单号", "运送"],
@@ -90,40 +110,56 @@ class IntentRecognizer:
         # 1. 先尝试规则匹配（高优先级）
         rule_intent, rule_confidence = self._rule_based_match(text)
         if rule_intent:
-            # 规则匹配到的结果优先返回
-            model_result = self.classifier(text, self.intents, multi_label=False)
+            # 区分模型类型调用（修复参数不匹配问题）
+            if hasattr(self.classifier, "task") and self.classifier.task == "text-classification":
+                # 本地微调模型：仅需传入文本，返回所有类别分数
+                model_output = self.classifier(text)[0]
+                model_best = sorted(model_output, key=lambda x: x["score"], reverse=True)[0]
+                model_best_intent = model_best["label"]
+                model_best_confidence = round(model_best["score"], 4)
+            else:
+                # 零样本模型：需传入文本、意图列表和multi_label
+                model_output = self.classifier(text, self.intents, multi_label=False)
+                model_best_intent = model_output["labels"][0]
+                model_best_confidence = round(model_output["scores"][0], 4)
             return {
                 "intents": [
                     {"intent": rule_intent, "confidence": rule_confidence},
-                    {"intent": model_result["labels"][0], "confidence": round(model_result["scores"][0], 4)}
+                    {"intent": model_best_intent, "confidence": model_best_confidence}
                 ],
                 "best_intent": rule_intent,
                 "best_confidence": rule_confidence,
                 "method": "rule_based"
             }
 
-        # 2. 规则匹配失败，使用模型预测（带优化提示）
-        # 优化提示词，给模型更多上下文
-        prompt = f"用户在电商平台咨询客服，这句话的意图是：{text}"
-        model_result = self.classifier(
-            prompt,  # 使用优化后的提示词
-            self.intents,
-            multi_label=False,
-            hypothesis_template="这句话的意图是{}。"  # 更明确的假设模板
-        )
 
-        # 3. 整理结果
-        top_indices = range(min(top_k, len(model_result["labels"])))
+        # 2. 模型预测（区分本地模型和预训练模型）
+        prompt = f"用户在电商平台咨询客服，这句话的意图是：{text}"
+        if hasattr(self.classifier, "task") and self.classifier.task == "text-classification":
+            # 本地微调模型：输出格式为 list[dict]（每个类别含label和score）
+            model_result = self.classifier(prompt)[0]
+            # 排序并提取top_k意图
+            intent_scores = sorted(
+                [{"intent": item["label"], "confidence": round(item["score"], 4)}
+                 for item in model_result],
+                key=lambda x: x["confidence"], reverse=True
+            )
+        else:
+            # 预训练零样本模型：输出格式为含labels和scores的dict
+            model_result = self.classifier(
+                prompt, self.intents, multi_label=False,
+                hypothesis_template="这句话的意图是{}。"
+            )
+            intent_scores = [
+                {"intent": model_result["labels"][i], "confidence": round(model_result["scores"][i], 4)}
+                for i in range(min(top_k, len(model_result["labels"])))
+            ]
+
+        # 3. 整理结果（保持统一输出格式）
         return {
-            "intents": [
-                {
-                    "intent": model_result["labels"][i],
-                    "confidence": round(model_result["scores"][i], 4)
-                }
-                for i in top_indices
-            ],
-            "best_intent": model_result["labels"][0],
-            "best_confidence": round(model_result["scores"][0], 4),
+            "intents": intent_scores[:top_k],
+            "best_intent": intent_scores[0]["intent"],
+            "best_confidence": intent_scores[0]["confidence"],
             "method": "model_based"
         }
 
@@ -239,11 +275,17 @@ if __name__ == "__main__":
     "咨询天气、日期、新闻等与客服业务完全无关的问题"
 ]
 
-    # 初始化意图识别器
+    # 方式1：加载本地微调模型（优先推荐）
+    # 注意：路径需根据实际目录结构调整（相对于当前文件的位置）
     recognizer = IntentRecognizer(
-        model_name="facebook/bart-large-mnli",
-        intents=intents
+        model_path="../../retraining/final_intent_model"  # 本地模型路径
     )
+
+    # # 使用零样本-初始化意图识别器
+    # recognizer = IntentRecognizer(
+    #     model_name="facebook/bart-large-mnli",
+    #     intents=intents
+    # )
     # 测试不同用户输入
     test_queries = [
         "我的订单什么时候能发货？",
