@@ -3,7 +3,7 @@
 分析用户输入的情感倾向（基于预训练模型）
 """
 from typing import Dict
-from transformers import pipeline  # 复用意图识别中使用的Transformers库
+from transformers import pipeline, AutoTokenizer  # 复用意图识别中使用的Transformers库
 
 
 class SentimentAnalyzer:
@@ -11,7 +11,7 @@ class SentimentAnalyzer:
     情感分析器类（基于预训练模型）
     """
 
-    def __init__(self, model_name: str = "hfl/chinese-roberta-wwm-ext-emotion"):
+    def __init__(self, model_name: str = "hfl/chinese-roberta-wwm-ext-emotion", model_path: str = None):
         """
         初始化情感分析器
 
@@ -26,19 +26,36 @@ class SentimentAnalyzer:
                               - uer/roberta-base-finetuned-dianping-chinese (中文电商评论)
 
         """
-        # 加载情感分析pipeline（自动下载模型）
-        self.classifier = pipeline(
-            "sentiment-analysis",
-            model=model_name,
-            return_all_scores=False  # 仅返回最高置信度结果
-        )
-        # 模型标签映射（不同模型标签可能不同，需根据实际模型调整）
-        # 当前模型(uer/dianping)标签：'positive'->积极, 'negative'->消极
-        self.label_mapping = {
-            "positive": "positive",   # 积极情感
-            "negative": "negative",   # 消极情感
-            "neutral": "neutral"      # 中性情感（部分模型支持）
-        }
+        # 1. 优先加载本地微调模型
+        if model_path:
+            # 加载本地模型和分词器（模型保存时需同时保存tokenizer）
+            self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+            self.classifier = pipeline(
+                "sentiment-analysis",
+                model=model_path,
+                tokenizer=self.tokenizer,
+                return_all_scores=False
+            )
+            # 从模型配置动态获取标签映射（避免硬编码）
+            self.label_mapping = {
+                self.classifier.model.config.id2label[i]: self.classifier.model.config.id2label[i]
+                for i in range(len(self.classifier.model.config.id2label))
+            }
+        # 2. 加载预训练模型（默认行为）
+        else:
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            self.classifier = pipeline(
+                "sentiment-analysis",
+                model=model_name,
+                tokenizer=self.tokenizer,
+                return_all_scores=False
+            )
+            # 预训练模型标签映射（三分类：积极/消极/中性）
+            self.label_mapping = {
+                "positive": "positive",
+                "negative": "negative",
+                "neutral": "neutral"
+            }
 
     def analyze(self, text: str) -> Dict[str, float]:
         """
