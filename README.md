@@ -24,11 +24,16 @@ conda activate smart-cs
 pip install -r requirements.txt
 ```
 ```shell
-pip install langchain_chroma langchain_community langchain_core langchain_text_splitters dashscope streamlit -i https://mirrors.aliyun.com/pypi/simple/
+pip install python-multipart fastapi docx pdfplumber langchain_chroma langchain_community langchain_core langchain_text_splitters dashscope streamlit -i https://mirrors.aliyun.com/pypi/simple/
 
 ```
 
-上传图片
+上传文档
 ```shell
 streamlit run ./core/app_file_upload.py
+```
+
+使用客服助手
+```shell
+streamlit run app_qa.py
 ```
