@@ -14,7 +14,16 @@ Smart Customer Service
 ## 项目结构
 ## 环境配置
 ```shell
-conda create -n smart-cs --override-channels -c https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/ python=3.9
+conda create -n smart-cs --override-channels -c https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/ python=3.10
 conda activate smart-cs
 pip install -r requirements.txt
+```
+```shell
+pip install langchain_chroma -i https://mirrors.aliyun.com/pypi/simple/
+pip install langchain_community -i https://mirrors.aliyun.com/pypi/simple/
+pip install langchain_core -i https://mirrors.aliyun.com/pypi/simple/
+pip install langchain_text_splitters -i https://mirrors.aliyun.com/pypi/simple/
+pip install dashscope -i https://mirrors.aliyun.com/pypi/simple/
+pip install streamlit -i https://mirrors.aliyun.com/pypi/simple/
+
 ```
