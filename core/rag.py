@@ -3,8 +3,9 @@ from langchain_community.chat_models.tongyi import ChatTongyi
 from langchain_community.embeddings import DashScopeEmbeddings
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.runnables import RunnablePassthrough, RunnableLambda
-
+from langchain_core.runnables import RunnablePassthrough, RunnableLambda, RunnableWithMessageHistory
+from langchain_core.output_parsers import StrOutputParser
+from core.file_history_store import get_history
 import config_data as config
 from core.vector_stores import VectorService
 
@@ -48,6 +49,8 @@ class RagService(object):
             formatted_str = ""
             for doc in docs:
                 formatted_str += f"文档片段：{doc.page_content}\n 文档元数据：{doc.metadata}\n\n"
+
+            print(f"整理完的资料为{formatted_str}")
             return formatted_str
 
         def format_for_prompt_template(value):
@@ -58,11 +61,33 @@ class RagService(object):
             new_value["input"] = value["input"]["input"]
             new_value["context"] = value["context"]
             new_value["history"] = value["input"]["history"]
+            new_value["question"] = value["input"]  #这里暂时时候用户提问，后续会变成自己生成问题
             return new_value
-
+        def print_prompt(value):
+            """打印prompt模板"""
+            print(f"Prompt: {value}")
+            return value
         chain = (
                 {
                     "input": RunnablePassthrough(),
                     "context": RunnableLambda(format_for_retriever) | retriever | format_document
                 } | RunnableLambda(format_for_prompt_template) | self.prompt_template | print_prompt | self.chat_model | StrOutputParser()
         )
+        conversation_chain = RunnableWithMessageHistory(
+            chain,
+            get_history,
+            input_messages_key="input",
+            history_messages_key="history",
+        )
+        return conversation_chain
+
+if __name__ == '__main__':
+    # session id 配置
+    session_config = {
+        "configurable": {
+            "session_id": "user_001",
+        }
+    }
+
+    res = RagService().chain.invoke({"input": "针织毛衣如何保养？"}, session_config)
+    print(res)

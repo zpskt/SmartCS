@@ -12,3 +12,4 @@ embedding_model_name = "text-embedding-v4"
 chat_model_name = "qwen3-max"
 
 similarity_threshold = 1            # 检索返回匹配的文档数量
+history_file_path = './data/history'
