@@ -24,7 +24,7 @@ conda activate smart-cs
 pip install -r requirements.txt
 ```
 ```shell
-pip install python-multipart fastapi docx pdfplumber langchain_chroma langchain_community langchain_core langchain_text_splitters dashscope streamlit -i https://mirrors.aliyun.com/pypi/simple/
+pip install langchain python-multipart fastapi docx pdfplumber langchain_chroma langchain_community langchain_core langchain_text_splitters dashscope streamlit -i https://mirrors.aliyun.com/pypi/simple/
 
 ```
 
