@@ -1,0 +1,6 @@
+INFO 2026-03-21 11:32:59,695 autoreload Watching for file changes with StatReloader
+INFO 2026-03-21 11:36:44,239 autoreload /Users/zhangpeng/Desktop/workspace/github/SmartCS/agent_backend/model_copy_service/model_copy_service/settings.py changed, reloading.
+INFO 2026-03-21 11:36:44,541 autoreload Watching for file changes with StatReloader
+INFO 2026-03-21 11:37:05,184 services 创建会话: efe0800c-ad04-4555-9172-3de4609b5b52, 用户: zhangpeng
+INFO 2026-03-21 11:37:14,995 services 创建会话: f19c7db5-db56-463f-90f6-d1cc953a0e7f, 用户: None
+INFO 2026-03-21 11:37:14,995 services 处理消息: session=f19c7db5-db56-463f-90f6-d1cc953a0e7f, message=把 X1 的功能复制到 X2...
