@@ -37,6 +37,65 @@ store = {}
 # 全局模型定义
 chat_model = ChatTongyi(model="qwen3-max")
 
+def save_memory():
+    '''
+    保存历史记忆
+    :return:
+    '''
+    memory = InMemorySaver()
+    agent = create_agent(
+        chat_model,
+        tools=None,
+        checkpointer=memory,
+    )
+    config = {"configurable": {"thread_id": "1"}}
+    before_memory = memory.get(config)
+    print(before_memory)
+    res = agent.invoke(
+        {"messages": [{"role": "user", "content": "我叫张鹏"}]},
+        config,  # [!code highlight]
+    )
+    after_memory = memory.get(config)
+    print(after_memory)
+
+    for msg in res["messages"]:
+        msg.pretty_print()
+
+def test_postgre():
+    import psycopg
+    # 测试 psycopg 能否正常连接
+    conn = psycopg.connect(
+        user="postgres",
+        password="zhangpeng",
+        dbname="maxkb",
+        host="localhost"
+    )
+    print("psycopg 连接 PostgreSQL 成功！")
+    conn.close()
+
+def save_memory_to_postgresql():
+    '''
+    保存上下文记忆到数据库中
+    :return:
+    '''
+    from langgraph.checkpoint.postgres import PostgresSaver  # [!code highlight]
+    DB_USER = "postgres"
+    DB_PASSWORD = "zhangpeng"
+    DB_URI = f"postgresql://{DB_USER}:{DB_PASSWORD}@localhost:5432/maxkb?sslmode=disable"
+    with PostgresSaver.from_conn_string(DB_URI) as checkpointer:
+        checkpointer.setup()  # 会自动创建表 都是checkpoint开头的表
+        agent = create_agent(
+            chat_model,
+            tools = [get_user_info],
+            checkpointer=checkpointer,  # [!code highlight]
+        )
+        res = agent.invoke(
+            {"messages": [{"role": "user","content": "你好，我叫张鹏"}]},
+            {"configurable": {"thread_id": "1"}},  # [!code highlight]
+        )
+        for msg in res["messages"]:
+            msg.pretty_print()
+
 def get_session_history(session_id: str):
     """
     获取指定 session_id 的对话历史
@@ -270,7 +329,7 @@ def read_memory_by_middleware_before_model():
 
 
 @after_model
-def validate_response(state: AgentState, runtime: Runtime) -> dict | None:
+def validate_response(state: AgentState, runtime: ToolRuntime) -> dict | None:
     """删除聊天信息里面的敏感词"""
     STOP_WORDS = ["password", "secret"]
     last_message = state["messages"][-1]
@@ -295,6 +354,9 @@ def read_memory_by_middleware_after_model():
     # 这里其实可以看到看不到最后一条的AI回答，因为已经被我们删除了
 
 if __name__ == '__main__':
+    save_memory()
+    # test_postgre()
+    # save_memory_to_postgresql()
     # 通过工具访问短期记忆
     # read_memory_by_tool()
     # 通过工具修改agent的短期记忆
@@ -302,7 +364,7 @@ if __name__ == '__main__':
     # 通过中间件访问短期记忆
     # read_memory_by_middleware_prompt()
     # 在模型执行前获取记忆执行逻辑
-    # read_memory_by_middleware_before_model()
+    read_memory_by_middleware_before_model()
 
     #在模型执行后获取记忆执行逻辑
-    read_memory_by_middleware_after_model()
+    # read_memory_by_middleware_after_model()
