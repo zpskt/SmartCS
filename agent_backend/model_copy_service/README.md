@@ -33,4 +33,9 @@ python manage.py runserver 0.0.0.0:8000
 
 python manage.py createsuperuser
 ```
+
+实验你的接口是否正常启动
+```shell
+curl http://localhost:8000/api/health/
+```
 默认账号密码均是 zhangepng
