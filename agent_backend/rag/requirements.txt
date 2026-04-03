@@ -1,0 +1,35 @@
+# RAG 项目依赖
+
+# LangChain 核心
+langchain>=0.1.0
+langchain-core>=0.1.0
+langchain-community>=0.0.10
+langchain-text-splitters>=0.0.1
+
+# 向量数据库
+langchain-chroma>=0.1.0
+chromadb>=0.4.0
+
+# 模型相关
+dashscope>=1.14.0
+
+# Web 框架（可选，用于 API 服务）
+fastapi>=0.104.0
+uvicorn>=0.24.0
+python-multipart>=0.0.6
+
+# 认证
+python-jose[cryptography]>=3.3.0
+passlib>=1.7.4
+bcrypt>=4.0.1
+
+# 飞书集成
+requests>=2.31.0
+
+# 数据处理
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+
+# 工具
+numpy>=1.24.0
+pandas>=2.0.0

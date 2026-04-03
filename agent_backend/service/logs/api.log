@@ -1,0 +1,25 @@
+INFO 2026-03-21 11:32:59,695 autoreload Watching for file changes with StatReloader
+INFO 2026-03-21 11:36:44,239 autoreload /Users/zhangpeng/Desktop/workspace/github/SmartCS/agent_backend/model_copy_service/model_copy_service/settings.py changed, reloading.
+INFO 2026-03-21 11:36:44,541 autoreload Watching for file changes with StatReloader
+INFO 2026-03-21 11:37:05,184 services 创建会话: efe0800c-ad04-4555-9172-3de4609b5b52, 用户: zhangpeng
+INFO 2026-03-21 11:37:14,995 services 创建会话: f19c7db5-db56-463f-90f6-d1cc953a0e7f, 用户: None
+INFO 2026-03-21 11:37:14,995 services 处理消息: session=f19c7db5-db56-463f-90f6-d1cc953a0e7f, message=把 X1 的功能复制到 X2...
+WARNING 2026-03-21 11:47:56,280 log Method Not Allowed: /api/chat/
+WARNING 2026-03-21 11:47:56,334 log Not Found: /favicon.ico
+WARNING 2026-03-21 11:49:23,086 log Not Found: /api/docs/
+WARNING 2026-03-21 11:49:34,385 log Not Found: /api/admin
+WARNING 2026-03-21 11:50:27,060 log Not Found: /api/docs/
+WARNING 2026-03-21 11:50:37,648 log Not Found: /api/redoc/
+INFO 2026-03-21 11:53:03,974 autoreload Watching for file changes with StatReloader
+WARNING 2026-03-21 11:53:43,401 log Not Found: /
+WARNING 2026-03-21 11:53:59,830 log Not Found: /
+WARNING 2026-03-21 11:54:06,097 log Not Found: /api/
+INFO 2026-03-21 11:57:22,603 autoreload /Users/zhangpeng/Desktop/workspace/github/SmartCS/agent_backend/model_copy_service/model_copy_service/urls.py changed, reloading.
+INFO 2026-03-21 11:57:22,989 autoreload Watching for file changes with StatReloader
+INFO 2026-03-21 11:57:28,605 autoreload /Users/zhangpeng/Desktop/workspace/github/SmartCS/agent_backend/model_copy_service/model_copy_service/urls.py changed, reloading.
+INFO 2026-03-21 11:57:28,815 autoreload Watching for file changes with StatReloader
+INFO 2026-03-21 19:34:02,300 autoreload Watching for file changes with StatReloader
+INFO 2026-03-21 19:34:17,611 autoreload Watching for file changes with StatReloader
+INFO 2026-03-21 19:41:53,168 autoreload /Users/zhangpeng/Desktop/workspace/github/SmartCS/agent_backend/model_copy_service/config/wsgi.py changed, reloading.
+INFO 2026-03-21 19:41:54,047 autoreload Watching for file changes with StatReloader
+INFO 2026-04-03 10:49:06,883 autoreload Watching for file changes with StatReloader
