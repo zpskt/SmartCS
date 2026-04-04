@@ -223,6 +223,55 @@ class EnterpriseRAGSystem:
         logger.info(f"对话完成 | 会话: {request.session_id} | 响应长度: {len(response.content)}")
         return response
     
+    async def chat_stream(self, request: ChatRequest):
+        """
+        流式对话生成器（异步）
+        
+        :param request: 聊天请求
+        :yield: SSE 格式的数据片段
+        """
+        import json as json_module
+        
+        logger.debug(f"处理流式对话请求 | 会话: {request.session_id}")
+        
+        # 验证会话
+        session = self.session_manager.get_session(request.session_id)
+        if not session:
+            logger.error(f"会话不存在: {request.session_id}")
+            raise ValueError(f"会话 {request.session_id} 不存在")
+        
+        # 添加用户消息
+        self.session_manager.add_message_to_session(
+            session_id=request.session_id,
+            role="user",
+            content=request.message
+        )
+        
+        # 流式输出
+        full_answer = ""
+        try:
+            for chunk in self.rag_engine.query_with_stream(
+                question=request.message,
+                session_id=request.session_id
+            ):
+                full_answer += chunk
+                # SSE 格式
+                yield f"data: {json_module.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+            
+            # 完成后保存完整消息
+            ai_message = self.session_manager.add_message_to_session(
+                session_id=request.session_id,
+                role="assistant",
+                content=full_answer
+            )
+            
+            # 发送完成信号
+            yield f"data: {json_module.dumps({'type': 'done', 'message_id': ai_message.message_id, 'session_id': request.session_id})}\n\n"
+            
+        except Exception as e:
+            logger.error(f"流式对话错误: {e}", exc_info=True)
+            yield f"data: {json_module.dumps({'type': 'error', 'message': str(e)})}\n\n"
+    
     def get_session_list(self, user_id: str) -> List[Dict[str, Any]]:
         """
         获取用户的会话列表

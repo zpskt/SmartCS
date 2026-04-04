@@ -2,6 +2,7 @@
 RAG 对话引擎
 核心问答逻辑,结合检索和生成,使用 LangGraph Agent + Checkpointer 实现持久化短期记忆
 """
+import logging
 from typing import List, Dict, Any, Optional
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -169,6 +170,8 @@ class RAGEngine:
         :param session_id: 会话 ID
         :yield: 流式输出的文本片段
         """
+        from langchain_core.messages import AIMessage
+        
         try:
             # 配置线程 ID
             config = {"configurable": {"thread_id": session_id}}
@@ -179,9 +182,11 @@ class RAGEngine:
                 config=config,
                 stream_mode="values"
             ):
-                if "messages" in chunk:
-                    last_msg = chunk["messages"][-1]
-                    if hasattr(last_msg, 'content') and last_msg.content:
-                        yield last_msg.content
+                last_msg = chunk['messages'][-1]
+                # 确保是 AI 消息且有内容
+                if isinstance(last_msg, AIMessage) and last_msg.content:
+                    logging.info(f"[Stream] {last_msg.content}")
+                    yield last_msg.content
+
         except Exception as e:
             yield f"错误:{str(e)}"

@@ -17,6 +17,7 @@ export interface LoginResponse {
 export interface ChatMessage {
   session_id: string
   message: string
+  stream?: boolean
 }
 
 export interface ChatResponse {
@@ -53,6 +54,83 @@ export const authApi = {
 export const chatApi = {
   sendMessage(data: ChatMessage): Promise<ChatResponse> {
     return apiClient.post('/chat', data)
+  },
+  
+  // 流式发送消息
+  async sendMessageStream(
+    data: ChatMessage,
+    onChunk: (chunk: string) => void,
+    onComplete: (sources?: Array<{ title: string; source_type: string; snippet: string }>) => void
+  ) {
+    // 获取 token
+    const token = localStorage.getItem('token')
+    
+    const response = await fetch('http://localhost:8000/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : '',
+        'x-authorization': token ? `Bearer ${token}` : '',
+      },
+      body: JSON.stringify({
+        ...data,
+        stream: true,
+      }),
+    })
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('未授权，请重新登录')
+      }
+      throw new Error(`请求失败: ${response.status}`)
+    }
+
+    const reader = response.body?.getReader()
+    const decoder = new TextDecoder()
+    let sources: any = undefined
+    let fullContent = ''
+
+    while (reader) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const chunk = decoder.decode(value, { stream: true })
+      const lines = chunk.split('\n')
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6)
+          try {
+            const parsed = JSON.parse(data)
+            
+            // 处理内容块
+            if (parsed.type === 'chunk' && parsed.content) {
+              fullContent = parsed.content
+              onChunk(fullContent)
+            }
+            
+            // 处理完成信号
+            if (parsed.type === 'done') {
+              onComplete(sources)
+              return
+            }
+            
+            // 兼容旧格式（直接有 content 字段）
+            if (parsed.content && !parsed.type) {
+              fullContent = parsed.content
+              onChunk(fullContent)
+            }
+            if (parsed.sources) {
+              sources = parsed.sources
+            }
+          } catch (e) {
+            console.error('解析错误:', e)
+          }
+        }
+      }
+    }
+    
+    onComplete(sources)
   },
 }
 

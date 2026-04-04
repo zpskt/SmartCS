@@ -153,32 +153,71 @@ async function sendMessage() {
     content: message,
   })
 
+  // 添加空的 AI 消息用于流式更新
+  chatStore.addMessage({
+    role: 'assistant',
+    content: '',
+  })
+
   chatStore.setLoading(true)
 
   try {
-    const response = await chatApi.sendMessage({
-      session_id: chatStore.sessionId,
-      message: message,
-    })
-
-    // 添加 AI 响应
-    chatStore.addMessage({
-      role: 'assistant',
-      content: response.content,
-      sources: response.sources,
-    })
-
-    await nextTick()
-    scrollToBottom()
-  } catch (err) {
+    let lastContent = ''
+    await chatApi.sendMessageStream(
+      {
+        session_id: chatStore.sessionId,
+        message: message,
+      },
+      // 流式内容回调 - 实现打字机效果
+      (fullText) => {
+        // 计算需要追加的新文本
+        const newText = fullText.slice(lastContent.length)
+        lastContent = fullText
+        
+        // 逐字显示新文本
+        typeWriterEffect(newText)
+      },
+      // 完成回调
+      (sources) => {
+        if (sources && sources.length > 0) {
+          chatStore.updateLastMessage(chatStore.messages[chatStore.messages.length - 1].content, sources)
+        }
+        chatStore.setLoading(false)
+      }
+    )
+  } catch (err: any) {
     console.error('发送消息失败:', err)
-    chatStore.addMessage({
-      role: 'assistant',
-      content: '抱歉，发送消息失败，请稍后重试。',
-    })
-  } finally {
+    const errorMsg = err.message || '抱歉，发送消息失败，请稍后重试。'
+    chatStore.updateLastMessage(errorMsg)
     chatStore.setLoading(false)
+    
+    // 如果是 401 错误，跳转到登录页
+    if (err.message?.includes('未授权')) {
+      setTimeout(() => {
+        handleLogout()
+      }, 1500)
+    }
   }
+}
+
+// 打字机效果
+function typeWriterEffect(text: string) {
+  const currentIndex = chatStore.messages.length - 1
+  let charIndex = 0
+  
+  function typeChar() {
+    if (charIndex < text.length) {
+      const currentContent = chatStore.messages[currentIndex].content
+      chatStore.messages[currentIndex].content = currentContent + text[charIndex]
+      charIndex++
+      nextTick(() => scrollToBottom())
+      
+      // 每个字符延迟 30ms，模拟打字效果
+      setTimeout(typeChar, 30)
+    }
+  }
+  
+  typeChar()
 }
 
 function scrollToBottom() {
@@ -323,6 +362,7 @@ function handleLogout() {
   border-radius: 10px;
   background: white;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  color: #333;
 }
 
 .message.user .message-content {
@@ -330,14 +370,21 @@ function handleLogout() {
   color: white;
 }
 
+.message.assistant .message-content {
+  background: white;
+  color: #333;
+}
+
 .message-content strong {
   display: block;
   margin-bottom: 5px;
+  color: inherit;
 }
 
 .message-content p {
   margin: 0;
   line-height: 1.6;
+  color: inherit;
 }
 
 .sources {

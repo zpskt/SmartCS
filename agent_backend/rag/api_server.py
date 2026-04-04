@@ -6,7 +6,8 @@ import time
 import json
 from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+from starlette.concurrency import iterate_in_threadpool
 from typing import List, Optional
 from pydantic import BaseModel
 import logging
@@ -47,64 +48,57 @@ async def log_requests(request: Request, call_next):
     url = str(request.url)
     client_host = request.client.host if request.client else "unknown"
     
-    # 尝试读取请求体（仅对 POST/PUT/PATCH）
-    request_body = None
-    if method in ["POST", "PUT", "PATCH"]:
+    # 检测是否为流式请求
+    is_streaming_request = False
+    if method == "POST" and "/api/chat" in url:
         try:
             body = await request.body()
             if body:
-                request_body = body.decode('utf-8')
-                # 重新设置请求体，以便后续路由能读取
-                async def receive():
-                    return {"type": "http.request", "body": body}
-                request._receive = receive
+                import json as json_mod
+                try:
+                    body_data = json_mod.loads(body)
+                    is_streaming_request = body_data.get("stream", False)
+                except:
+                    pass
+                
+                # 只有非流式请求才重写 receive
+                if not is_streaming_request:
+                    async def receive():
+                        return {"type": "http.request", "body": body}
+                    request._receive = receive
         except Exception as e:
             logger.warning(f"读取请求体失败: {e}")
     
     # 记录请求开始
     logger.info(f"📨 请求开始 | {method} {url} | 客户端: {client_host}")
-    if request_body:
-        try:
-            # 格式化 JSON 以便阅读
-            formatted_body = json.dumps(json.loads(request_body), ensure_ascii=False, indent=2)
-            logger.debug(f"请求体:\n{formatted_body}")
-        except:
-            logger.debug(f"请求体: {request_body[:500]}")
     
     # 处理请求
-    try:
-        response = await call_next(request)
-        process_time = time.time() - start_time
-        
-        # 记录响应信息
-        status_code = response.status_code
-        status_emoji = "✅" if status_code < 400 else "❌"
-        
-        logger.info(
-            f"{status_emoji} 请求完成 | {method} {url} | "
+    response = await call_next(request)
+    process_time = time.time() - start_time
+    
+    # 记录响应信息
+    status_code = response.status_code
+    status_emoji = "✅" if status_code < 400 else "❌"
+    
+    # 检测是否为流式响应
+    is_streaming_response = hasattr(response, 'body_iterator')
+    
+    logger.info(
+        f"{status_emoji} 请求完成 | {method} {url} | "
+        f"状态码: {status_code} | "
+        f"耗时: {process_time:.3f}s | "
+        f"{'流式' if is_streaming_request or is_streaming_response else '普通'}"
+    )
+    
+    # 如果是错误响应，记录详细信息
+    if status_code >= 400:
+        logger.warning(
+            f"⚠️ 错误响应 | {method} {url} | "
             f"状态码: {status_code} | "
             f"耗时: {process_time:.3f}s"
         )
-        
-        # 如果是错误响应，记录详细信息
-        if status_code >= 400:
-            logger.warning(
-                f"⚠️ 错误响应 | {method} {url} | "
-                f"状态码: {status_code} | "
-                f"耗时: {process_time:.3f}s"
-            )
-        
-        return response
     
-    except Exception as e:
-        process_time = time.time() - start_time
-        logger.error(
-            f"💥 服务器错误 | {method} {url} | "
-            f"耗时: {process_time:.3f}s | "
-            f"错误: {str(e)}",
-            exc_info=True
-        )
-        raise
+    return response
 
 
 # ========== 请求/响应模型 ==========
@@ -280,14 +274,24 @@ async def export_session(
 @app.post("/api/chat")
 async def chat(request: ChatRequest, user_id: str = Depends(verify_token)):
     """对话接口"""
-    logger.info(f"💬 对话请求 | 用户: {user_id} | 会话: {request.session_id}")
+    logger.info(f"💬 对话请求 | 用户: {user_id} | 会话: {request.session_id} | 流式: {request.stream}")
     logger.debug(f"问题: {request.message[:200]}")
     
     try:
         rag_system = get_enterprise_rag_system()
-        response = rag_system.chat(request)
-        logger.info(f"✅ 对话成功 | 响应长度: {len(response.content)} 字符")
-        return response.dict()
+        
+        # 根据 stream 参数选择响应方式
+        if request.stream:
+            # 流式响应 - 使用异步生成器
+            return StreamingResponse(
+                rag_system.chat_stream(request),
+                media_type="text/event-stream"
+            )
+        else:
+            # 一次性响应
+            response = rag_system.chat(request)
+            logger.info(f"✅ 对话成功 | 响应长度: {len(response.content)} 字符")
+            return response.model_dump()
     except ValueError as e:
         logger.warning(f"⚠️ 对话失败 - 参数错误 | 用户: {user_id} | 错误: {str(e)}")
         raise HTTPException(status_code=404, detail=str(e))
