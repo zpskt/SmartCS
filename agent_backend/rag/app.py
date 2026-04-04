@@ -23,12 +23,19 @@ class EnterpriseRAGSystem:
     def __init__(self):
         """初始化企业 RAG 系统"""
         logger.info("🚀 初始化企业 RAG 系统...")
+        from config.settings import settings
+        
         self.auth_service = get_auth_service()
         self.knowledge_base = KnowledgeBaseService()
         self.rag_engine = RAGEngine()
         self.session_manager = SessionManager()
         self.memory_store = MemoryStore()
         self.feishu_client = FeishuClient()
+        
+        # 保存飞书配置引用
+        self.app_id = settings.FEISHU_APP_ID
+        self.app_secret = settings.FEISHU_APP_SECRET
+        
         logger.info("✅ 企业 RAG 系统初始化完成")
     
     # ========== 权限管理 ==========
@@ -66,6 +73,38 @@ class EnterpriseRAGSystem:
         """
         return self.auth_service.has_permission(user_id, permission)
     
+    @staticmethod
+    def _extract_feishu_token(url: str) -> Optional[str]:
+        """
+        从飞书 URL 中提取文档 ID/token
+        
+        :param url: 飞书文档 URL
+        :return: 文档 ID/token，失败返回 None
+        
+        支持的 URL 格式：
+        - https://xxx.feishu.cn/wiki/SOISwgNkeiCxTfkxxXKc7UnEnxA (Wiki)
+        - https://xxx.feishu.cn/docs/xxx (云文档)
+        - https://xxx.feishu.cn/docx/xxx (新版云文档)
+        """
+        import re
+        
+        # 匹配飞书文档 ID（wiki/docs/docx 后的部分）
+        patterns = [
+            r'/wiki/([a-zA-Z0-9]+)',      # Wiki 文档
+            r'/docs/([a-zA-Z0-9]+)',       # 云文档
+            r'/docx/([a-zA-Z0-9]+)',       # 新版云文档
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                doc_id = match.group(1)
+                logger.debug(f"✅ 提取到飞书文档 ID: {doc_id}")
+                return doc_id
+        
+        logger.warning(f"❌ 无法从 URL 提取文档 ID: {url}")
+        return None
+    
     # ========== 知识库管理 ==========
     def add_knowledge(
         self,
@@ -80,15 +119,73 @@ class EnterpriseRAGSystem:
         添加知识到知识库
         
         :param title: 文档标题
-        :param content: 文档内容
-        :param source_type: 来源类型
+        :param content: 文档内容（飞书类型可为空，会自动从 URL 获取）
+        :param source_type: 来源类型 (manual, feishu, upload, web, other)
         :param created_by: 创建者
-        :param source_url: 来源 URL
+        :param source_url: 来源 URL（飞书类型必填）
         :param metadata: 额外元数据
         :return: 添加结果
         """
         try:
             logger.debug(f"添加知识: {title} (类型: {source_type})")
+            
+            # 如果是飞书文档且内容为空，从 URL 获取内容
+            if source_type == "feishu":
+                if not source_url:
+                    return {
+                        "success": False,
+                        "message": "飞书文档必须提供 source_url"
+                    }
+                
+                logger.info(f"🔗 从飞书 URL 获取内容: {source_url}")
+                
+                try:
+                    # 尝试方法1：从 URL 提取 token，使用 API 获取（需要认证）
+                    docx_token = self._extract_feishu_token(source_url)
+                    
+                    # 只有配置了有效的飞书凭证才使用 API 方式
+                    has_valid_credentials = (
+                        self.app_id and 
+                        self.app_secret and 
+                        self.app_id != "your_feishu_app_id" and
+                        self.app_secret != "your_feishu_app_secret"
+                    )
+                    
+                    logger.debug(f"飞书凭证检查 | app_id: {self.app_id} | 有效: {has_valid_credentials}")
+                    
+                    if docx_token and has_valid_credentials:
+                        # 有 token 且配置了认证信息，使用 API 方式
+                        logger.info("📡 使用飞书 API 获取文档内容")
+                        feishu_doc = self.feishu_client.get_docx_content(docx_token)
+                    else:
+                        # 无 token 或未配置认证，尝试直接访问公网文档
+                        if not has_valid_credentials:
+                            logger.info("⚠️ 未配置飞书凭证，使用公网访问模式")
+                        logger.info("🌐 尝试直接访问公网文档")
+                        feishu_doc = self.feishu_client.get_public_doc_content(source_url)
+                    
+                    content = feishu_doc.get("content", "")
+                    
+                    # 如果未提供标题，使用飞书文档标题
+                    if not title:
+                        title = feishu_doc.get("title", "无标题")
+                    
+                    logger.info(f"✅ 成功获取飞书文档内容 | 标题: {title} | 长度: {len(content)} 字符")
+                    
+                except Exception as e:
+                    logger.error(f"❌ 获取飞书文档失败: {str(e)}", exc_info=True)
+                    return {
+                        "success": False,
+                        "message": f"获取飞书文档失败：{str(e)}"
+                    }
+            
+            # 验证内容不为空
+            if not content or not content.strip():
+                return {
+                    "success": False,
+                    "message": "文档内容不能为空"
+                }
+            
             doc = self.knowledge_base.add_document(
                 title=title,
                 content=content,

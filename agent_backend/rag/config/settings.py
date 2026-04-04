@@ -46,8 +46,8 @@ class Settings(BaseSettings):
     ADMIN_USERS: List[str] = ["admin", "zpaskt"]
     
     # ========== 飞书配置 ==========
-    FEISHU_APP_ID: Optional[str] = None
-    FEISHU_APP_SECRET: Optional[str] = None
+    FEISHU_APP_ID: str = ""
+    FEISHU_APP_SECRET: str = ""
     FEISHU_VERIFICATION_TOKEN: Optional[str] = None
     FEISHU_BASE_URL: str = "https://open.feishu.cn/open-apis"
     

@@ -202,31 +202,54 @@
         </button>
       </div>
 
-      <!-- 飞书文档同步 -->
+      <!-- 飞书文档 -->
       <div v-if="addMode === 'feishu'" class="feishu-container">
-        <div class="form-group">
-          <label for="feishuToken">飞书访问令牌 (可选)</label>
-          <input
-            id="feishuToken"
-            v-model="feishuToken"
-            type="password"
-            placeholder="输入飞书 API Token（如已配置可留空）"
-          />
-          <small>如果后端已配置飞书应用凭证，可以留空</small>
-        </div>
+        <form @submit.prevent="handleAddFeishuDoc" class="add-form">
+          <div class="form-group">
+            <label for="feishuUrl">飞书文档 URL *</label>
+            <input
+              id="feishuUrl"
+              v-model="feishuUrl"
+              type="url"
+              placeholder="https://xxx.feishu.cn/wiki/xxx"
+              required
+            />
+            <small>请输入飞书 Wiki 或文档的完整链接</small>
+          </div>
 
-        <div class="feishu-tips">
-          <h4>💡 提示</h4>
-          <ul>
-            <li>系统将自动同步您有权限的飞书文档</li>
-            <li>同步过程可能需要几分钟，请耐心等待</li>
-            <li>同步完成后可以在“文档列表”中查看</li>
-          </ul>
-        </div>
+          <div class="form-group">
+            <label for="feishuTitle">标题 (可选)</label>
+            <input
+              id="feishuTitle"
+              v-model="feishuTitle"
+              type="text"
+              placeholder="留空则自动从文档提取"
+            />
+          </div>
 
-        <button @click="handleSyncFeishu" :disabled="syncing" class="submit-btn">
-          {{ syncing ? '同步中...' : '开始同步' }}
-        </button>
+          <!-- 元数据 -->
+          <div class="form-group">
+            <label>元数据 (JSON格式，可选)</label>
+            <textarea
+              v-model="feishuMetadataText"
+              placeholder='{"category": "产品文档", "department": "技术部"}'
+              rows="3"
+            ></textarea>
+          </div>
+
+          <div class="feishu-tips">
+            <h4>💡 提示</h4>
+            <ul>
+              <li>系统将自动解析飞书文档内容并存入知识库</li>
+              <li>请确保您有该文档的访问权限</li>
+              <li>支持飞书 Wiki 和云文档</li>
+            </ul>
+          </div>
+
+          <button type="submit" :disabled="addingFeishu" class="submit-btn">
+            {{ addingFeishu ? '添加中...' : '添加文档' }}
+          </button>
+        </form>
       </div>
     </div>
 
@@ -312,9 +335,11 @@ const uploadMetadataText = ref('')
 const uploading = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 
-// 飞书同步
-const feishuToken = ref('')
-const syncing = ref(false)
+// 飞书文档
+const feishuUrl = ref('')
+const feishuTitle = ref('')
+const feishuMetadataText = ref('')
+const addingFeishu = ref(false)
 
 // 编辑对话框
 const showEditDialog = ref(false)
@@ -471,17 +496,44 @@ const handleUploadFile = async () => {
   }
 }
 
-// 飞书同步
-const handleSyncFeishu = async () => {
-  syncing.value = true
+// 添加飞书文档
+const handleAddFeishuDoc = async () => {
+  if (!feishuUrl.value) {
+    showMessage('请输入飞书文档 URL', 'error')
+    return
+  }
+
+  let metadata: Record<string, any> | undefined
+  if (feishuMetadataText.value.trim()) {
+    try {
+      metadata = JSON.parse(feishuMetadataText.value)
+    } catch (e) {
+      showMessage('元数据格式错误', 'error')
+      return
+    }
+  }
+
+  addingFeishu.value = true
   try {
-    await knowledgeApi.syncFeishu(feishuToken.value || undefined)
-    showMessage('飞书文档同步成功，请稍后刷新查看')
-    feishuToken.value = ''
+    await knowledgeApi.addDocument({
+      title: feishuTitle.value || '',
+      content: '', // 后端会从 URL 解析内容
+      source_type: 'feishu',
+      source_url: feishuUrl.value,
+      metadata
+    })
+    showMessage('飞书文档添加成功')
+    // 清空表单
+    feishuUrl.value = ''
+    feishuTitle.value = ''
+    feishuMetadataText.value = ''
+    // 切换到列表页
+    activeTab.value = 'list'
+    loadKnowledgeList()
   } catch (error: any) {
-    showMessage(error.message || '同步失败', 'error')
+    showMessage(error.message || '添加失败', 'error')
   } finally {
-    syncing.value = false
+    addingFeishu.value = false
   }
 }
 
