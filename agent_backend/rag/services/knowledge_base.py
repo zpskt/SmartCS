@@ -88,6 +88,9 @@ class KnowledgeBaseService:
         # 文本分块
         chunks = self.text_splitter.split_text(content)
         
+        # 计算文件大小
+        file_size = len(content.encode('utf-8'))
+        
         # 创建文档对象
         doc = KnowledgeDocument(
             doc_id=f"doc_{datetime.now().strftime('%Y%m%d%H%M%S')}_{md5_hex[:8]}",
@@ -97,7 +100,8 @@ class KnowledgeBaseService:
             source_url=source_url,
             metadata=metadata or {},
             chunks=chunks,
-            created_by=created_by
+            created_by=created_by,
+            file_size=file_size
         )
         
         # 添加到向量数据库
@@ -107,9 +111,14 @@ class KnowledgeBaseService:
                 "doc_id": doc.doc_id,
                 "title": title,
                 "source_type": source_type,
+                "source_url": source_url or "",
                 "created_by": created_by,
-                "created_at": doc.created_at.isoformat()
-            } for _ in chunks]
+                "created_at": doc.created_at.isoformat(),
+                "file_size": file_size,
+                "chunk_index": i,
+                "total_chunks": len(chunks),
+                "full_content": content  # 存储完整内容用于管理界面
+            } for i in range(len(chunks))]
         )
         
         # 保存 MD5
@@ -181,12 +190,43 @@ class KnowledgeBaseService:
     
     def get_all_documents(self) -> List[Dict[str, Any]]:
         """
-        获取所有文档列表
+        获取所有文档列表（按 doc_id 去重，返回完整元数据）
         
         :return: 文档列表
         """
         all_data = self.vector_store.get_all_documents()
-        return all_data.get("documents", [])
+        ids = all_data.get("ids", [])
+        metadatas = all_data.get("metadatas", [])
+        documents = all_data.get("documents", [])
+        
+        # 按 doc_id 分组，合并同一文档的多个 chunk
+        doc_dict = {}
+        for doc_id, metadata, content in zip(ids, metadatas, documents):
+            if not metadata:
+                continue
+            
+            current_doc_id = metadata.get("doc_id")
+            if not current_doc_id:
+                continue
+            
+            if current_doc_id not in doc_dict:
+                doc_dict[current_doc_id] = {
+                    "doc_id": current_doc_id,
+                    "title": metadata.get("title", "无标题"),
+                    "source_type": metadata.get("source_type", "unknown"),
+                    "source_url": metadata.get("source_url", ""),
+                    "created_by": metadata.get("created_by", "unknown"),
+                    "created_at": metadata.get("created_at", ""),
+                    "file_size": metadata.get("file_size", 0),
+                    "chunk_count": metadata.get("total_chunks", 0),
+                    "content": metadata.get("full_content", "")  # 从元数据获取完整内容
+                }
+        
+        # 转换为列表并按创建时间排序
+        result = list(doc_dict.values())
+        result.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        
+        return result
     
     def update_document(self, doc_id: str, new_content: str) -> bool:
         """

@@ -16,6 +16,14 @@
           {{ session.title }}
         </div>
       </div>
+      <div class="nav-menu">
+        <router-link to="/knowledge" class="nav-item">
+          📚 知识库管理
+        </router-link>
+        <router-link to="/chat" class="nav-item">
+          💬 智能问答
+        </router-link>
+      </div>
       <div class="user-info">
         <span>{{ userStore.username }}</span>
         <button @click="handleLogout" class="logout-btn">退出登录</button>
@@ -294,6 +302,31 @@ function handleLogout() {
 }
 
 .session-item.active {
+  background: #e8eaf6;
+  color: #667eea;
+  font-weight: 500;
+}
+
+.nav-menu {
+  padding: 10px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.nav-item {
+  display: block;
+  padding: 12px;
+  margin-bottom: 5px;
+  border-radius: 5px;
+  text-decoration: none;
+  color: #555;
+  transition: background 0.2s;
+}
+
+.nav-item:hover {
+  background: #f0f0f0;
+}
+
+.nav-item.router-link-active {
   background: #e8eaf6;
   color: #667eea;
   font-weight: 500;

@@ -30,6 +30,7 @@ class KnowledgeDocument(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.now)
     created_by: str
     status: str = "active"  # active, archived, deleted
+    file_size: Optional[int] = None  # 文件大小（字节）
 
 
 class Session(BaseModel):

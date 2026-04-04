@@ -114,6 +114,12 @@ class KnowledgeAddRequest(BaseModel):
     source_url: Optional[str] = None
 
 
+class KnowledgeUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    source_url: Optional[str] = None
+
+
 class SessionCreateRequest(BaseModel):
     user_id: str
     title: str = "新会话"
@@ -186,6 +192,132 @@ async def search_knowledge(query: str, limit: int = 5):
     rag_system = get_enterprise_rag_system()
     results = rag_system.search_knowledge(query=query, limit=limit)
     return {"results": results}
+
+
+@app.delete("/api/knowledge/{doc_id}")
+async def delete_knowledge(
+    doc_id: str,
+    user_id: str = Depends(verify_token)
+):
+    """删除知识库文档"""
+    logger.info(f"🗑️ 删除知识库文档 | 用户: {user_id} | 文档ID: {doc_id}")
+    rag_system = get_enterprise_rag_system()
+    
+    success = rag_system.knowledge_base.delete_document(doc_id)
+    
+    if not success:
+        logger.warning(f"⚠️ 删除失败 | 文档不存在: {doc_id}")
+        raise HTTPException(status_code=404, detail="文档不存在")
+    
+    logger.info(f"✅ 文档删除成功 | 文档ID: {doc_id}")
+    return {"success": True, "message": "文档已删除"}
+
+
+@app.put("/api/knowledge/{doc_id}")
+async def update_knowledge(
+    doc_id: str,
+    request: KnowledgeUpdateRequest,
+    user_id: str = Depends(verify_token)
+):
+    """更新知识库文档"""
+    logger.info(f"✏️ 更新知识库文档 | 用户: {user_id} | 文档ID: {doc_id}")
+    rag_system = get_enterprise_rag_system()
+    
+    try:
+        # 获取原文档信息（需要从向量库查询）
+        all_data = rag_system.knowledge_base.vector_store.get_all_documents()
+        metadatas = all_data.get("metadatas", [])
+        documents = all_data.get("documents", [])
+        
+        # 查找原文档元数据
+        original_metadata = None
+        original_content = None
+        for meta, doc in zip(metadatas, documents):
+            if meta and meta.get("doc_id") == doc_id:
+                original_metadata = meta
+                original_content = doc
+                break
+        
+        if not original_metadata:
+            raise HTTPException(status_code=404, detail="文档不存在")
+        
+        # 构建新文档内容
+        new_title = request.title or original_metadata.get("title", "")
+        new_content = request.content or original_content
+        new_source_url = request.source_url if request.source_url is not None else original_metadata.get("source_url", "")
+        
+        # 删除旧文档
+        rag_system.knowledge_base.delete_document(doc_id)
+        
+        # 添加新文档（保持原有元数据）
+        result = rag_system.add_knowledge(
+            title=new_title,
+            content=new_content,
+            source_type=original_metadata.get("source_type", "manual"),
+            created_by=original_metadata.get("created_by", user_id),
+            source_url=new_source_url if new_source_url else None
+        )
+        
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result["message"])
+        
+        logger.info(f"✅ 文档更新成功 | 文档ID: {doc_id}")
+        return {"success": True, "message": "文档已更新", "doc_id": result.get("doc_id")}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ 更新文档失败 | 错误: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"更新失败：{str(e)}")
+
+
+@app.get("/api/knowledge/list")
+async def list_knowledge(
+    page: int = 1,
+    page_size: int = 10,
+    user_id: str = Depends(verify_token)
+):
+    """获取知识库文档列表（分页）"""
+    logger.info(f"📚 获取知识库列表 | 用户: {user_id} | 页码: {page} | 每页: {page_size}")
+    rag_system = get_enterprise_rag_system()
+    
+    # 获取所有文档
+    all_docs = rag_system.knowledge_base.get_all_documents()
+    total = len(all_docs)
+    
+    # 计算分页
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    paginated_docs = all_docs[start_idx:end_idx]
+    
+    logger.info(f"✅ 返回知识库列表 | 总数: {total} | 当前页: {len(paginated_docs)}")
+    
+    return {
+        "success": True,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size if total > 0 else 0,
+        "documents": paginated_docs
+    }
+
+
+@app.get("/api/knowledge/{doc_id}")
+async def get_knowledge_detail(
+    doc_id: str,
+    user_id: str = Depends(verify_token)
+):
+    """获取单个文档详情"""
+    logger.info(f"📄 获取文档详情 | 用户: {user_id} | 文档ID: {doc_id}")
+    rag_system = get_enterprise_rag_system()
+    
+    all_docs = rag_system.knowledge_base.get_all_documents()
+    doc = next((d for d in all_docs if d["doc_id"] == doc_id), None)
+    
+    if not doc:
+        raise HTTPException(status_code=404, detail="文档不存在")
+    
+    return {"success": True, "document": doc}
 
 
 @app.post("/api/knowledge/sync-feishu")

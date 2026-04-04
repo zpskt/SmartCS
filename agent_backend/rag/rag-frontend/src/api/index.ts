@@ -39,6 +39,32 @@ export interface KnowledgeDocument {
   source_url?: string
 }
 
+export interface KnowledgeAddRequest {
+  title: string
+  content: string
+  source_type?: string
+  source_url?: string
+  metadata?: Record<string, any>
+}
+
+export interface KnowledgeSearchRequest {
+  query: string
+  limit?: number
+  source_type?: string
+}
+
+export interface KnowledgeItem {
+  id: string
+  title: string
+  content: string
+  source_type: string
+  source_url?: string
+  metadata?: Record<string, any>
+  created_at: string
+  updated_at?: string
+  created_by: string
+}
+
 export interface SessionInfo {
   session_id: string
   title: string
@@ -135,10 +161,51 @@ export const chatApi = {
 }
 
 export const knowledgeApi = {
-  addDocument(data: KnowledgeDocument) {
-    return apiClient.post('/knowledge', data)
+  // 获取知识库列表
+  getKnowledgeList(params?: { page?: number; page_size?: number; source_type?: string }): Promise<{ total: number; items: KnowledgeItem[] }> {
+    return apiClient.get('/knowledge/list', { params })
   },
   
+  // 添加知识库文档
+  addDocument(data: KnowledgeAddRequest) {
+    return apiClient.post('/knowledge/add', data)
+  },
+  
+  // 更新知识库文档
+  updateDocument(id: string, data: Partial<KnowledgeAddRequest>) {
+    return apiClient.put(`/knowledge/${id}`, data)
+  },
+  
+  // 删除知识库文档
+  deleteDocument(id: string) {
+    return apiClient.delete(`/knowledge/${id}`)
+  },
+  
+  // 搜索知识库
+  searchKnowledge(data: KnowledgeSearchRequest): Promise<{ results: KnowledgeItem[] }> {
+    return apiClient.post('/knowledge/search', data)
+  },
+  
+  // 同步飞书文档
+  syncFeishu(token?: string) {
+    return apiClient.post('/knowledge/sync-feishu', { token })
+  },
+  
+  // 上传文件
+  uploadFile(file: File, metadata?: Record<string, any>) {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (metadata) {
+      formData.append('metadata', JSON.stringify(metadata))
+    }
+    return apiClient.post('/knowledge/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+  },
+  
+  // 兼容旧接口
   search(query: string, limit: number = 5) {
     return apiClient.get('/knowledge/search', { params: { query, limit } })
   },
