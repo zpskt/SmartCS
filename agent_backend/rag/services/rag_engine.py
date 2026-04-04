@@ -5,6 +5,7 @@ RAG 对话引擎
 from typing import List, Dict, Any, Optional
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.agents import create_agent, AgentState
 from langchain_community.chat_models import ChatTongyi
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.prebuilt import create_react_agent
@@ -32,7 +33,9 @@ class RAGEngine:
         
         # 初始化工具列表
         self.tools = [self._create_retrieval_tool()]
-        
+        # todo 暂时为null 后期添加
+        self.system_prompt = ""
+        self.middleware = []
         # 初始化 Checkpointer (使用 SQLite)
         self.checkpointer = self._init_checkpointer()
         
@@ -83,10 +86,13 @@ class RAGEngine:
             
         :return: Agent 实例
         """
-        agent = create_react_agent(
+        system_prompt = ""
+        agent = create_agent(
             model=self.chat_model,
             tools=self.tools,
-            checkpointer=self.checkpointer
+            system_prompt=self.system_prompt,
+            checkpointer=self.checkpointer,
+            middleware=self.middleware,
         )
             
         return agent
