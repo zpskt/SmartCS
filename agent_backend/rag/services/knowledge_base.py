@@ -105,19 +105,28 @@ class KnowledgeBaseService:
         )
         
         # 添加到向量数据库
+        base_metadata = {
+            "doc_id": doc.doc_id,
+            "title": title,
+            "source_type": source_type,
+            "source_url": source_url or "",
+            "created_by": created_by,
+            "created_at": doc.created_at.isoformat(),
+            "file_size": file_size,
+            "chunk_index": 0,
+            "total_chunks": len(chunks),
+            "full_content": content  # 存储完整内容用于管理界面
+        }
+        
+        # 合并自定义元数据
+        if metadata:
+            base_metadata.update(metadata)
+        
         self.vector_store.add_texts(
             texts=chunks,
             metadatas=[{
-                "doc_id": doc.doc_id,
-                "title": title,
-                "source_type": source_type,
-                "source_url": source_url or "",
-                "created_by": created_by,
-                "created_at": doc.created_at.isoformat(),
-                "file_size": file_size,
-                "chunk_index": i,
-                "total_chunks": len(chunks),
-                "full_content": content  # 存储完整内容用于管理界面
+                **base_metadata,
+                "chunk_index": i
             } for i in range(len(chunks))]
         )
         

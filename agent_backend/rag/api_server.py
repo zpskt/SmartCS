@@ -4,11 +4,11 @@ FastAPI 接口层（可选）
 """
 import time
 import json
-from fastapi import FastAPI, HTTPException, Depends, Header, Request
+from fastapi import FastAPI, HTTPException, Depends, Header, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import iterate_in_threadpool
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 import logging
 
@@ -112,6 +112,7 @@ class KnowledgeAddRequest(BaseModel):
     content: str
     source_type: str
     source_url: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 
 class KnowledgeUpdateRequest(BaseModel):
@@ -179,7 +180,8 @@ async def add_knowledge(
         content=request.content,
         source_type=request.source_type,
         created_by=user_id,
-        source_url=request.source_url
+        source_url=request.source_url,
+        metadata=request.metadata
     )
     
     if not result["success"]:
@@ -322,6 +324,54 @@ async def get_knowledge_detail(
         raise HTTPException(status_code=404, detail="文档不存在")
     
     return {"success": True, "document": doc}
+
+
+@app.post("/api/knowledge/upload")
+async def upload_knowledge_file(
+    file: UploadFile = File(...),
+    metadata: Optional[str] = None,
+    user_id: str = Depends(verify_token)
+):
+    """上传文件到知识库"""
+    logger.info(f"📤 上传文件 | 用户: {user_id} | 文件名: {file.filename}")
+    
+    try:
+        # 读取文件内容
+        content = await file.read()
+        text_content = content.decode('utf-8', errors='ignore')
+        
+        if not text_content.strip():
+            raise HTTPException(status_code=400, detail="文件内容为空")
+        
+        # 解析元数据
+        parsed_metadata = {}
+        if metadata:
+            try:
+                parsed_metadata = json.loads(metadata)
+            except json.JSONDecodeError:
+                raise HTTPException(status_code=400, detail="元数据格式错误，请使用有效的 JSON")
+        
+        # 调用 RAG 系统处理文件
+        rag_system = get_enterprise_rag_system()
+        result = rag_system.upload_file_to_knowledge(
+            filename=file.filename,
+            content=text_content,
+            created_by=user_id,
+            metadata=parsed_metadata
+        )
+        
+        if not result["success"]:
+            logger.error(f"❌ 文件上传失败 | 用户: {user_id} | 原因: {result['message']}")
+            raise HTTPException(status_code=400, detail=result["message"])
+        
+        logger.info(f"✅ 文件上传成功 | 文档ID: {result.get('doc_id')}")
+        return result
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ 文件上传失败 | 错误: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"上传失败：{str(e)}")
 
 
 @app.post("/api/knowledge/sync-feishu")

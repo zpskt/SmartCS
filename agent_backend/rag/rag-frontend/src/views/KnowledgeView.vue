@@ -167,14 +167,14 @@
             ref="fileInput"
             type="file"
             @change="handleFileSelect"
-            accept=".txt,.pdf,.doc,.docx,.md"
+            accept=".txt,.pdf,.doc,.docx,.md,.csv"
             style="display: none"
           />
           <button @click="$refs.fileInput.click()" class="upload-btn">
             选择文件
           </button>
           <p>或拖拽文件到此处</p>
-          <small>支持: TXT, PDF, DOC, DOCX, MD</small>
+          <small>支持: TXT, PDF, DOC, DOCX, MD, CSV</small>
         </div>
 
         <div v-if="selectedFile" class="file-info">

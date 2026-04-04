@@ -2,6 +2,7 @@
 企业知识库 RAG 系统 - 主应用
 整合所有服务，提供统一的调用接口
 """
+import os
 from typing import Dict, Any, Optional, List
 from services.auth import get_auth_service, AuthService
 from services.knowledge_base import KnowledgeBaseService
@@ -72,7 +73,8 @@ class EnterpriseRAGSystem:
         content: str,
         source_type: str,
         created_by: str,
-        source_url: Optional[str] = None
+        source_url: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         添加知识到知识库
@@ -82,6 +84,7 @@ class EnterpriseRAGSystem:
         :param source_type: 来源类型
         :param created_by: 创建者
         :param source_url: 来源 URL
+        :param metadata: 额外元数据
         :return: 添加结果
         """
         try:
@@ -91,7 +94,8 @@ class EnterpriseRAGSystem:
                 content=content,
                 source_type=source_type,
                 created_by=created_by,
-                source_url=source_url
+                source_url=source_url,
+                metadata=metadata
             )
             logger.info(f"知识添加成功: {title} (ID: {doc.doc_id})")
             return {
@@ -150,6 +154,50 @@ class EnterpriseRAGSystem:
         :return: 搜索结果列表
         """
         return self.knowledge_base.search_documents(query, limit)
+    
+    def upload_file_to_knowledge(
+        self,
+        filename: str,
+        content: str,
+        created_by: str,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        上传文件到知识库
+        
+        :param filename: 文件名
+        :param content: 文件内容
+        :param created_by: 创建者
+        :param metadata: 额外元数据
+        :return: 上传结果
+        """
+        try:
+            logger.debug(f"上传文件: {filename} (大小: {len(content)} 字符)")
+            
+            # 使用文件名作为标题（去除扩展名）
+            title = os.path.splitext(filename)[0]
+            
+            doc = self.knowledge_base.add_document(
+                title=title,
+                content=content,
+                source_type="upload",
+                created_by=created_by,
+                source_url=None,
+                metadata=metadata or {}
+            )
+            logger.info(f"文件上传成功: {filename} (ID: {doc.doc_id})")
+            return {
+                "success": True,
+                "doc_id": doc.doc_id,
+                "title": title,
+                "message": "文件上传成功"
+            }
+        except Exception as e:
+            logger.error(f"文件上传失败: {filename} | 错误: {str(e)}", exc_info=True)
+            return {
+                "success": False,
+                "message": str(e)
+            }
     
     # ========== 会话管理 ==========
     def create_session(self, user_id: str, title: str = "新会话") -> Dict[str, Any]:
