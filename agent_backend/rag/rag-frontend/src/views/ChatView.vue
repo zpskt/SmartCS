@@ -46,7 +46,8 @@
         >
           <div class="message-content">
             <strong>{{ message.role === 'user' ? '您' : 'AI 助手' }}:</strong>
-            <p>{{ message.content }}</p>
+            <div v-if="message.role === 'user'" class="message-text">{{ message.content }}</div>
+            <div v-else class="message-text markdown-body" v-html="renderMarkdown(message.content)"></div>
             
             <!-- 显示参考来源 -->
             <div v-if="message.sources && message.sources.length > 0" class="sources">
@@ -95,6 +96,7 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useChatStore } from '@/stores/chat'
 import { chatApi, sessionApi } from '@/api'
+import { marked } from 'marked'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -238,6 +240,12 @@ function handleLogout() {
   userStore.clearUserInfo()
   chatStore.clearMessages()
   router.push('/login')
+}
+
+// 渲染 Markdown
+function renderMarkdown(content: string) {
+  if (!content) return ''
+  return marked(content)
 }
 </script>
 
@@ -418,6 +426,104 @@ function handleLogout() {
   margin: 0;
   line-height: 1.6;
   color: inherit;
+}
+
+.message-text {
+  line-height: 1.6;
+}
+
+.markdown-body :deep(h1),
+.markdown-body :deep(h2),
+.markdown-body :deep(h3),
+.markdown-body :deep(h4),
+.markdown-body :deep(h5),
+.markdown-body :deep(h6) {
+  margin: 12px 0 8px 0;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.markdown-body :deep(h1) { font-size: 20px; }
+.markdown-body :deep(h2) { font-size: 18px; }
+.markdown-body :deep(h3) { font-size: 16px; }
+.markdown-body :deep(h4) { font-size: 15px; }
+
+.markdown-body :deep(p) {
+  margin: 8px 0;
+}
+
+.markdown-body :deep(code) {
+  padding: 2px 6px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+}
+
+.markdown-body :deep(pre) {
+  padding: 12px;
+  background: #282c34;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 10px 0;
+}
+
+.markdown-body :deep(pre code) {
+  background: none;
+  padding: 0;
+  color: #abb2bf;
+  font-size: 13px;
+}
+
+.markdown-body :deep(ul),
+.markdown-body :deep(ol) {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.markdown-body :deep(li) {
+  margin: 4px 0;
+}
+
+.markdown-body :deep(blockquote) {
+  margin: 10px 0;
+  padding: 10px 15px;
+  border-left: 4px solid #667eea;
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: 4px;
+}
+
+.markdown-body :deep(a) {
+  color: #667eea;
+  text-decoration: none;
+}
+
+.markdown-body :deep(a:hover) {
+  text-decoration: underline;
+}
+
+.markdown-body :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 10px 0;
+}
+
+.markdown-body :deep(th),
+.markdown-body :deep(td) {
+  border: 1px solid #ddd;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.markdown-body :deep(th) {
+  background: #f5f5f5;
+  font-weight: 600;
+}
+
+.markdown-body :deep(img) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
 }
 
 .sources {

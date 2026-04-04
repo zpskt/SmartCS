@@ -52,6 +52,7 @@
               <span class="source-tag">{{ getSourceTypeName(doc.source_type) }}</span>
               <span class="time">{{ formatDate(doc.created_at) }}</span>
             </div>
+            <div v-if="doc.content" class="content-preview" v-html="renderMarkdown(doc.content)"></div>
             <div v-if="doc.metadata && Object.keys(doc.metadata).length > 0" class="metadata-preview">
               <strong>元数据:</strong>
               <span v-for="(value, key) in doc.metadata" :key="key" class="meta-item">
@@ -305,6 +306,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { knowledgeApi, type KnowledgeAddRequest, type KnowledgeItem } from '@/api'
 import { useUserStore } from '@/stores/user'
+import { marked } from 'marked'
 
 const router = useRouter()
 const activeTab = ref('list')
@@ -627,6 +629,11 @@ const formatDate = (dateStr: string) => {
 const goBack = () => {
   router.push('/chat')
 }
+
+// 渲染 Markdown
+const renderMarkdown = (content: string) => {
+  return marked(content)
+}
 </script>
 
 <style scoped>
@@ -801,6 +808,105 @@ const goBack = () => {
 .time {
   color: #909399;
   font-size: 12px;
+}
+
+.content-preview {
+  margin-top: 8px;
+  padding: 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #606266;
+  max-height: 300px;
+  overflow-y: auto;
+  word-break: break-word;
+}
+
+.content-preview :deep(h1),
+.content-preview :deep(h2),
+.content-preview :deep(h3),
+.content-preview :deep(h4),
+.content-preview :deep(h5),
+.content-preview :deep(h6) {
+  margin: 12px 0 8px 0;
+  font-weight: 600;
+  color: #303133;
+}
+
+.content-preview :deep(h1) { font-size: 18px; }
+.content-preview :deep(h2) { font-size: 16px; }
+.content-preview :deep(h3) { font-size: 15px; }
+
+.content-preview :deep(p) {
+  margin: 8px 0;
+}
+
+.content-preview :deep(code) {
+  padding: 2px 6px;
+  background: #e8eaed;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.content-preview :deep(pre) {
+  padding: 12px;
+  background: #282c34;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.content-preview :deep(pre code) {
+  background: none;
+  padding: 0;
+  color: #abb2bf;
+}
+
+.content-preview :deep(ul),
+.content-preview :deep(ol) {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.content-preview :deep(li) {
+  margin: 4px 0;
+}
+
+.content-preview :deep(blockquote) {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-left: 4px solid #409eff;
+  background: #ecf5ff;
+  color: #606266;
+}
+
+.content-preview :deep(a) {
+  color: #409eff;
+  text-decoration: none;
+}
+
+.content-preview :deep(a:hover) {
+  text-decoration: underline;
+}
+
+.content-preview :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+}
+
+.content-preview :deep(th),
+.content-preview :deep(td) {
+  border: 1px solid #dcdfe6;
+  padding: 6px 12px;
+  text-align: left;
+}
+
+.content-preview :deep(th) {
+  background: #f5f7fa;
+  font-weight: 600;
 }
 
 .metadata-preview {
