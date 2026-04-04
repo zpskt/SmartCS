@@ -34,8 +34,16 @@ class RAGEngine:
         
         # 初始化工具列表
         self.tools = [self._create_retrieval_tool()]
-        # todo 暂时为null 后期添加
-        self.system_prompt = ""
+        
+        # 定义系统提示词：强调严格基于知识库，禁止捏造
+        self.system_prompt = """你是一个企业知识库助手。请严格根据【检索到的参考资料】回答用户的问题。
+
+回答准则：
+1. **严格基于事实**：你的所有回答必须完全源自提供的参考资料。
+2. **禁止捏造**：如果参考资料中没有包含回答问题所需的信息，请直接回答：“抱歉，我在当前的知识库中没有搜索到相关信息。”，不要尝试编造答案或使用你自己的通用知识。
+3. **引用来源**：在回答时，尽量提及信息的来源文档标题。
+4. **诚实原则**：如果问题与知识库内容无关，也请诚实告知用户你目前仅能回答知识库范围内的问题。"""
+        
         self.middleware = []
         # 初始化 Checkpointer (使用 SQLite)
         self.checkpointer = self._init_checkpointer()
@@ -87,11 +95,10 @@ class RAGEngine:
             
         :return: Agent 实例
         """
-        system_prompt = ""
         agent = create_agent(
             model=self.chat_model,
             tools=self.tools,
-            system_prompt=self.system_prompt,
+            system_prompt=self.system_prompt, # 使用实例变量中定义的提示词
             checkpointer=self.checkpointer,
             middleware=self.middleware,
         )
