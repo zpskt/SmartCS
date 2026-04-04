@@ -2,11 +2,12 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 export const useUserStore = defineStore('user', () => {
-  const userId = ref<string>('')
-  const username = ref<string>('')
+  // 从 localStorage 恢复用户信息
+  const userId = ref<string>(localStorage.getItem('userId') || '')
+  const username = ref<string>(localStorage.getItem('username') || '')
   const role = ref<string>('')
-  const token = ref<string>('')
-  const isLoggedIn = ref<boolean>(false)
+  const token = ref<string>(localStorage.getItem('token') || '')
+  const isLoggedIn = ref<boolean>(!!localStorage.getItem('token'))
 
   function setUserInfo(id: string, name: string, userRole: string, userToken: string) {
     userId.value = id

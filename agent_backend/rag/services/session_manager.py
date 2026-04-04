@@ -209,13 +209,35 @@ class SessionManager:
         :param user_id: 用户 ID
         :return: 会话列表
         """
-        session_ids = self.user_sessions_cache.get(user_id, [])
+        # 直接从数据库查询，确保数据一致性
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM sessions 
+            WHERE user_id = ? AND is_active = 1 
+            ORDER BY updated_at DESC
+        """, (user_id,))
+        
+        rows = cursor.fetchall()
         sessions = []
         
-        for sid in session_ids:
-            session = self.get_session(sid)
-            if session:
-                sessions.append(session)
+        for row in rows:
+            session = Session(
+                session_id=row['session_id'],
+                user_id=row['user_id'],
+                title=row['title'],
+                messages=[],  # 不加载消息，提高性能
+                created_at=datetime.fromisoformat(row['created_at']),
+                updated_at=datetime.fromisoformat(row['updated_at']),
+                metadata=json.loads(row['metadata']),
+                is_active=bool(row['is_active'])
+            )
+            sessions.append(session)
+            
+            # 更新缓存
+            self.sessions_cache[session.session_id] = session
+        
+        # 更新用户会话缓存
+        self.user_sessions_cache[user_id] = [s.session_id for s in sessions]
         
         return sessions
     
