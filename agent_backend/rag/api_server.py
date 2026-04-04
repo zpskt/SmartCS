@@ -120,6 +120,10 @@ class KnowledgeUpdateRequest(BaseModel):
     source_url: Optional[str] = None
 
 
+class KnowledgeDeleteRequest(BaseModel):
+    doc_id: str
+
+
 class SessionCreateRequest(BaseModel):
     user_id: str
     title: str = "新会话"
@@ -194,22 +198,22 @@ async def search_knowledge(query: str, limit: int = 5):
     return {"results": results}
 
 
-@app.delete("/api/knowledge/{doc_id}")
+@app.post("/api/knowledge/delete")
 async def delete_knowledge(
-    doc_id: str,
+    request: KnowledgeDeleteRequest,
     user_id: str = Depends(verify_token)
 ):
     """删除知识库文档"""
-    logger.info(f"🗑️ 删除知识库文档 | 用户: {user_id} | 文档ID: {doc_id}")
+    logger.info(f"🗑️ 删除知识库文档 | 用户: {user_id} | 文档ID: {request.doc_id}")
     rag_system = get_enterprise_rag_system()
     
-    success = rag_system.knowledge_base.delete_document(doc_id)
+    success = rag_system.knowledge_base.delete_document(request.doc_id)
     
     if not success:
-        logger.warning(f"⚠️ 删除失败 | 文档不存在: {doc_id}")
+        logger.warning(f"⚠️ 删除失败 | 文档不存在: {request.doc_id}")
         raise HTTPException(status_code=404, detail="文档不存在")
     
-    logger.info(f"✅ 文档删除成功 | 文档ID: {doc_id}")
+    logger.info(f"✅ 文档删除成功 | 文档ID: {request.doc_id}")
     return {"success": True, "message": "文档已删除"}
 
 

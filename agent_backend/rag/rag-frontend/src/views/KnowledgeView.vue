@@ -61,7 +61,7 @@
           </div>
           <div class="doc-actions">
             <button @click="editDocument(doc)" class="edit-btn">编辑</button>
-            <button @click="deleteDocument(doc.id)" class="delete-btn">删除</button>
+            <button @click="deleteDocument(doc.doc_id)" class="delete-btn">删除</button>
           </div>
         </div>
       </div>
@@ -281,6 +281,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { knowledgeApi, type KnowledgeAddRequest, type KnowledgeItem } from '@/api'
+import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
 const activeTab = ref('list')
@@ -539,12 +540,14 @@ const saveEdit = async () => {
 
 // 删除文档
 const deleteDocument = async (id: string) => {
-  if (!confirm('确定要删除这个文档吗？')) {
+  if (!confirm('确定要删除这个文档吗?')) {
     return
   }
 
   try {
-    await knowledgeApi.deleteDocument(id)
+    const userStore = useUserStore()
+    console.log("文档id为：{} userId 为 {}", id, userStore.userId)
+    await knowledgeApi.deleteDocument(id, userStore.userId)
     showMessage('删除成功')
     loadKnowledgeList()
   } catch (error: any) {

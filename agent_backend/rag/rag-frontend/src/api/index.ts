@@ -53,6 +53,11 @@ export interface KnowledgeSearchRequest {
   source_type?: string
 }
 
+export interface KnowledgeDeleteRequest {
+  doc_id: string
+  user_id: string
+}
+
 export interface KnowledgeItem {
   id: string
   title: string
@@ -177,8 +182,8 @@ export const knowledgeApi = {
   },
   
   // 删除知识库文档
-  deleteDocument(id: string) {
-    return apiClient.delete(`/knowledge/${id}`)
+  deleteDocument(docId: string, userId: string) {
+    return apiClient.post('/knowledge/delete', { doc_id: docId, user_id: userId })
   },
   
   // 搜索知识库
