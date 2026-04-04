@@ -1,15 +1,18 @@
 """
 RAG 对话引擎
-核心问答逻辑，结合检索和生成
+核心问答逻辑,结合检索和生成,使用 LangGraph Agent + Checkpointer 实现持久化短期记忆
 """
 from typing import List, Dict, Any, Optional
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.runnables import RunnablePassthrough
-from langchain_core.output_parsers import StrOutputParser
 from langchain_community.chat_models import ChatTongyi
+from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.prebuilt import create_react_agent
+from langchain_core.tools import tool
 from config.settings import settings
 from stores.vector_store import VectorStoreService
+import sqlite3
+import os
 
 
 class RAGEngine:
@@ -27,104 +30,109 @@ class RAGEngine:
             dashscope_api_key=settings.DASHSCOPE_API_KEY
         )
         
-        # 构建 prompt 模板
-        self.prompt_template = ChatPromptTemplate.from_messages([
-            ("system", """你是一个专业的企业知识库助手。请根据提供的参考资料回答用户问题。
+        # 初始化工具列表
+        self.tools = [self._create_retrieval_tool()]
+        
+        # 初始化 Checkpointer (使用 SQLite)
+        self.checkpointer = self._init_checkpointer()
+        
+        # 创建 Agent
+        self.agent = self._create_agent()
+    
+    def _create_retrieval_tool(self):
+        """
+        创建检索工具
             
-回答规则：
-1. 优先基于参考资料回答，不要编造信息
-2. 如果参考资料不足，请如实说明
-3. 回答简洁明了，专业准确
-4. 必要时可以引用参考资料的来源
-
-参考资料：
-{context}
-
-历史对话：
-{history}
-"""),
-            MessagesPlaceholder(variable_name="chat_history"),
-            ("human", "{question}")
-        ])
-        
-        # 构建链
-        self.chain = self._build_chain()
-    
-    def _format_docs(self, docs: List[Document]) -> str:
+        :return: LangChain Tool
         """
-        格式化检索到的文档
+        @tool
+        def search_knowledge_base(query: str) -> str:
+            """在企业知识库中搜索相关信息。当用户提问时，应该先调用此工具检索相关知识。"""
+            docs = self.retriever.invoke(query)
+            if not docs:
+                return "未找到相关参考资料"
+                
+            formatted = []
+            for i, doc in enumerate(docs, 1):
+                source = doc.metadata.get("title", "未知来源")
+                formatted.append(f"[资料{i}] 来源:{source}\n内容:{doc.page_content}")
+                
+            return "\n\n".join(formatted)
+            
+        return search_knowledge_base
         
-        :param docs: 文档列表
-        :return: 格式化后的文本
+    def _init_checkpointer(self):
         """
-        if not docs:
-            return "未找到相关参考资料"
-        
-        formatted = []
-        for i, doc in enumerate(docs, 1):
-            source = doc.metadata.get("title", "未知来源")
-            formatted.append(f"[资料{i}] 来源：{source}\n内容：{doc.page_content}")
-        
-        return "\n\n".join(formatted)
-    
-    def _build_chain(self):
+        初始化 SQLite Checkpointer
+            
+        :return: SqliteSaver 实例
         """
-        构建 RAG 链
+        # 确保数据目录存在
+        db_dir = os.path.dirname(settings.CHECKPOINTER_DB_PATH)
+        os.makedirs(db_dir, exist_ok=True)
+            
+        # 创建并返回 checkpointer
+        conn = sqlite3.connect(settings.CHECKPOINTER_DB_PATH, check_same_thread=False)
+        checkpointer = SqliteSaver(conn)
+            
+        return checkpointer
         
-        :return: 执行链
+    def _create_agent(self):
         """
-        
-        def retrieve_and_format(input_dict: dict) -> dict:
-            """检索并格式化上下文"""
-            question = input_dict["question"]
-            docs = self.retriever.invoke(question)
-            context = self._format_docs(docs)
-            return {
-                "context": context,
-                "question": question,
-                "chat_history": input_dict.get("chat_history", []),
-                "sources": [doc.metadata for doc in docs]
-            }
-        
-        chain = (
-            RunnablePassthrough.assign(
-                context=lambda x: self._format_docs(self.retriever.invoke(x["question"]))
-            )
-            | self.prompt_template
-            | self.chat_model
-            | StrOutputParser()
+        创建 ReAct Agent
+            
+        :return: Agent 实例
+        """
+        agent = create_react_agent(
+            model=self.chat_model,
+            tools=self.tools,
+            checkpointer=self.checkpointer
         )
-        
-        return chain
+            
+        return agent
     
     def query(
         self,
         question: str,
-        chat_history: Optional[List[Dict[str, str]]] = None,
+        session_id: str,
         include_sources: bool = True
     ) -> Dict[str, Any]:
         """
-        执行查询
-        
+        执行查询 (使用 Agent + Checkpointer)
+            
         :param question: 用户问题
-        :param chat_history: 聊天历史（可选）
+        :param session_id: 会话 ID (用于持久化短期记忆)
         :param include_sources: 是否包含来源信息
         :return: 包含回答和来源的字典
         """
         try:
-            # 执行链
-            result = self.chain.invoke({
-                "question": question,
-                "chat_history": chat_history or []
-            })
-            
+            # 配置线程 ID (用于 checkpointer 识别会话)
+            config = {"configurable": {"thread_id": session_id}}
+                
+            # 调用 Agent
+            result = self.agent.invoke(
+                {"messages": [{"role": "user", "content": question}]},
+                config=config
+            )
+                
+            # 提取最后一条消息作为回答
+            messages = result.get("messages", [])
+            if not messages:
+                return {
+                    "answer": "抱歉，未收到回复",
+                    "sources": []
+                }
+                
+            last_message = messages[-1]
+            answer = last_message.content if hasattr(last_message, 'content') else str(last_message)
+                
             response = {
-                "answer": result,
+                "answer": answer,
                 "sources": []
             }
-            
+                
             if include_sources:
-                # 获取来源信息
+                # 获取来源信息 (重新检索以获取元数据)
                 docs = self.retriever.invoke(question)
                 response["sources"] = [
                     {
@@ -134,26 +142,40 @@ class RAGEngine:
                     }
                     for doc in docs[:3]  # 只显示前 3 个来源
                 ]
-            
+                
             return response
-            
+                
         except Exception as e:
             return {
-                "answer": f"抱歉，处理时出现错误：{str(e)}",
+                "answer": f"抱歉，处理时出现错误:{str(e)}",
                 "sources": []
             }
     
     def query_with_stream(
         self,
         question: str,
-        chat_history: Optional[List[Dict[str, str]]] = None
+        session_id: str
     ):
         """
-        流式查询（生成器）
+        流式查询 (生成器)
         
         :param question: 用户问题
-        :param chat_history: 聊天历史
+        :param session_id: 会话 ID
         :yield: 流式输出的文本片段
         """
-        # TODO: 实现流式输出
-        pass
+        try:
+            # 配置线程 ID
+            config = {"configurable": {"thread_id": session_id}}
+            
+            # 流式调用 Agent
+            for chunk in self.agent.stream(
+                {"messages": [{"role": "user", "content": question}]},
+                config=config,
+                stream_mode="values"
+            ):
+                if "messages" in chunk:
+                    last_msg = chunk["messages"][-1]
+                    if hasattr(last_msg, 'content') and last_msg.content:
+                        yield last_msg.content
+        except Exception as e:
+            yield f"错误:{str(e)}"

@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     CHROMA_PERSIST_DIR: str = "./data/chroma_db"
     COLLECTION_NAME: str = "knowledge_base"
     
+    # ========== Checkpointer 数据库配置 ==========
+    CHECKPOINTER_DB_PATH: str = "./data/checkpointer.db"  # SQLite 数据库路径
+    
     # ========== 文本分割配置 ==========
     CHUNK_SIZE: int = 500
     CHUNK_OVERLAP: int = 50
@@ -53,7 +56,7 @@ class Settings(BaseSettings):
     SCORE_THRESHOLD: float = 0.5
     
     # ========== 日志配置 ==========
-    LOG_LEVEL: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+    LOG_LEVEL: str = "DEBUG"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s"
     LOG_DIR: str = "./logs"
     LOG_FILE_MAX_BYTES: int = 10 * 1024 * 1024  # 10MB

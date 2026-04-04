@@ -196,11 +196,11 @@ class EnterpriseRAGSystem:
         chat_history = self.session_manager.get_session_history(request.session_id)
         logger.debug(f"会话历史条数: {len(chat_history)}")
         
-        # 执行 RAG 查询
+        # 执行 RAG 查询 (使用 Agent + Checkpointer，不再需要手动传递 chat_history)
         logger.debug("执行 RAG 查询...")
         rag_response = self.rag_engine.query(
             question=request.message,
-            chat_history=chat_history,
+            session_id=request.session_id,  # 传入 session_id 用于持久化短期记忆
             include_sources=True
         )
         logger.debug(f"RAG 查询完成 | 引用来源数: {len(rag_response.get('sources', []))}")
