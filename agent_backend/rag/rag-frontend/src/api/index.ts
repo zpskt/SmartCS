@@ -67,12 +67,13 @@ export const knowledgeApi = {
 }
 
 export const sessionApi = {
+  // 创建新会话
   createSession(userId: string, title: string = '新会话') {
-    return apiClient.post('/session', { user_id: userId, title })
+    return apiClient.post('/session/create', { user_id: userId, title })
   },
-  
+  // 根据userId获取会话连接
   getSessionList(userId: string): Promise<SessionInfo[]> {
-    return apiClient.get(`/sessions/${userId}`)
+    return apiClient.get(`/session/list`, { params: { user_id: userId } })
   },
   
   clearSession(sessionId: string) {

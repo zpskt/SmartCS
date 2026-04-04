@@ -56,6 +56,7 @@ async function handleLogin() {
   error.value = ''
 
   try {
+    // 登录
     const response = await authApi.login({
       username: username.value,
       password: password.value,
@@ -68,6 +69,7 @@ async function handleLogin() {
         response.role || 'user',
         response.token
       )
+      // 如果登录成功就进chat聊天页
       router.push('/chat')
     } else {
       error.value = response.message || '登录失败'

@@ -97,21 +97,26 @@ const sessions = ref<any[]>([])
 const messagesContainer = ref<HTMLElement | null>(null)
 
 onMounted(async () => {
+  console.log('用户ID:', userStore.userId)
   // 加载会话列表
   await loadSessions()
-  
+  console.log('会话列表:', sessions.value)
   // 如果没有会话，创建一个新会话
   if (sessions.value.length === 0) {
+    console.log('没有会话，创建一个新会话')
     await createNewSession()
   } else {
+    console.log('有会话，切换到第一个会话')
     // 切换到第一个会话
+    console.log('切换到第一个会话:', sessions.value[0].session_id)
     chatStore.setSessionId(sessions.value[0].session_id)
   }
 })
-
+// 加载会话
 async function loadSessions() {
   try {
-    sessions.value = await sessionApi.getSessionList(userStore.userId)
+    const response = await sessionApi.getSessionList(userStore.userId)
+    sessions.value = response.sessions || []
   } catch (err) {
     console.error('加载会话失败:', err)
   }

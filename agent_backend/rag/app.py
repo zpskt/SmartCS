@@ -10,6 +10,10 @@ from services.session_manager import SessionManager
 from services.memory_store import MemoryStore
 from integrations.feishu import FeishuClient
 from models.schemas import ChatRequest, ChatResponse
+from utils.logger import get_logger
+
+# 获取应用层日志记录器
+logger = get_logger("app")
 
 
 class EnterpriseRAGSystem:
@@ -17,12 +21,14 @@ class EnterpriseRAGSystem:
     
     def __init__(self):
         """初始化企业 RAG 系统"""
+        logger.info("🚀 初始化企业 RAG 系统...")
         self.auth_service = get_auth_service()
         self.knowledge_base = KnowledgeBaseService()
         self.rag_engine = RAGEngine()
         self.session_manager = SessionManager()
         self.memory_store = MemoryStore()
         self.feishu_client = FeishuClient()
+        logger.info("✅ 企业 RAG 系统初始化完成")
     
     # ========== 权限管理 ==========
     def login(self, username: str, password: str) -> Dict[str, Any]:
@@ -33,11 +39,14 @@ class EnterpriseRAGSystem:
         :param password: 密码
         :return: 登录结果
         """
+        logger.debug(f"尝试验证用户: {username}")
         user = self.auth_service.authenticate_user(username, password)
         if not user:
+            logger.warning(f"用户验证失败: {username}")
             return {"success": False, "message": "用户名或密码错误"}
         
         token = self.auth_service.create_access_token(user["user_id"])
+        logger.info(f"用户登录成功: {username} (ID: {user['user_id']})")
         return {
             "success": True,
             "user_id": user["user_id"],
@@ -76,6 +85,7 @@ class EnterpriseRAGSystem:
         :return: 添加结果
         """
         try:
+            logger.debug(f"添加知识: {title} (类型: {source_type})")
             doc = self.knowledge_base.add_document(
                 title=title,
                 content=content,
@@ -83,12 +93,14 @@ class EnterpriseRAGSystem:
                 created_by=created_by,
                 source_url=source_url
             )
+            logger.info(f"知识添加成功: {title} (ID: {doc.doc_id})")
             return {
                 "success": True,
                 "doc_id": doc.doc_id,
                 "message": "知识添加成功"
             }
         except Exception as e:
+            logger.error(f"添加知识失败: {title} | 错误: {str(e)}", exc_info=True)
             return {
                 "success": False,
                 "message": str(e)
@@ -165,9 +177,12 @@ class EnterpriseRAGSystem:
         :param request: 聊天请求
         :return: 聊天响应
         """
+        logger.debug(f"处理对话请求 | 会话: {request.session_id}")
+        
         # 验证会话
         session = self.session_manager.get_session(request.session_id)
         if not session:
+            logger.error(f"会话不存在: {request.session_id}")
             raise ValueError(f"会话 {request.session_id} 不存在")
         
         # 添加用户消息
@@ -179,13 +194,16 @@ class EnterpriseRAGSystem:
         
         # 获取会话历史
         chat_history = self.session_manager.get_session_history(request.session_id)
+        logger.debug(f"会话历史条数: {len(chat_history)}")
         
         # 执行 RAG 查询
+        logger.debug("执行 RAG 查询...")
         rag_response = self.rag_engine.query(
             question=request.message,
             chat_history=chat_history,
             include_sources=True
         )
+        logger.debug(f"RAG 查询完成 | 引用来源数: {len(rag_response.get('sources', []))}")
         
         # 添加 AI 响应到会话
         ai_message = self.session_manager.add_message_to_session(
@@ -202,6 +220,7 @@ class EnterpriseRAGSystem:
             sources=rag_response["sources"]
         )
         
+        logger.info(f"对话完成 | 会话: {request.session_id} | 响应长度: {len(response.content)}")
         return response
     
     def get_session_list(self, user_id: str) -> List[Dict[str, Any]]:

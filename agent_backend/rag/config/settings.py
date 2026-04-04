@@ -52,6 +52,13 @@ class Settings(BaseSettings):
     SIMILARITY_TOP_K: int = 5
     SCORE_THRESHOLD: float = 0.5
     
+    # ========== 日志配置 ==========
+    LOG_LEVEL: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+    LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s"
+    LOG_DIR: str = "./logs"
+    LOG_FILE_MAX_BYTES: int = 10 * 1024 * 1024  # 10MB
+    LOG_BACKUP_COUNT: int = 5
+    
     class Config:
         env_file = ".env"
         case_sensitive = True
