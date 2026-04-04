@@ -2,6 +2,7 @@
 FastAPI 接口层（可选）
 提供 RESTful API 服务
 """
+import string
 import time
 import json
 from fastapi import FastAPI, HTTPException, Depends, Header, Request, UploadFile, File
@@ -281,20 +282,35 @@ async def update_knowledge(
 async def list_knowledge(
     page: int = 1,
     page_size: int = 10,
+    source_type: Optional[str] = None,
     user_id: str = Depends(verify_token)
 ):
-    """获取知识库文档列表（分页）"""
-    logger.info(f"📚 获取知识库列表 | 用户: {user_id} | 页码: {page} | 每页: {page_size}")
+    """获取知识库文档列表（分页）
+    
+    Args:
+        page: 页码
+        page_size: 每页数量
+        source_type: 文档来源类型过滤 (manual, feishu, upload, web, other)，不传则返回全部
+    """
+    logger.info(f"📚 获取知识库列表 | 用户: {user_id} | 页码: {page} | 每页: {page_size} | 类型: {source_type or '全部'}")
     rag_system = get_enterprise_rag_system()
     
     # 获取所有文档
     all_docs = rag_system.knowledge_base.get_all_documents()
-    total = len(all_docs)
+    
+    # 根据 source_type 过滤
+    if source_type:
+        filtered_docs = [doc for doc in all_docs if doc.get("source_type") == source_type]
+        logger.info(f"🔍 按类型过滤 | 类型: {source_type} | 过滤前: {len(all_docs)} | 过滤后: {len(filtered_docs)}")
+    else:
+        filtered_docs = all_docs
+    
+    total = len(filtered_docs)
     
     # 计算分页
     start_idx = (page - 1) * page_size
     end_idx = start_idx + page_size
-    paginated_docs = all_docs[start_idx:end_idx]
+    paginated_docs = filtered_docs[start_idx:end_idx]
     
     logger.info(f"✅ 返回知识库列表 | 总数: {total} | 当前页: {len(paginated_docs)}")
     
