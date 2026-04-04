@@ -7,8 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 from pydantic import BaseModel
 
-from .app import get_enterprise_rag_system
-from .models.schemas import ChatRequest, ChatResponse
+from app import get_enterprise_rag_system
+from models.schemas import ChatRequest, ChatResponse
 
 
 # ========== FastAPI 应用初始化 ==========
