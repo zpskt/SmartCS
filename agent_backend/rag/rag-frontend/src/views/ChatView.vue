@@ -1,41 +1,16 @@
 <template>
   <div class="chat-container">
-    <!-- 侧边栏 -->
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <h2>会话列表</h2>
+    <!-- 会话选择栏 -->
+    <div class="session-bar">
+      <div class="session-selector">
+        <select v-model="currentSessionId" @change="switchSession" class="session-select">
+          <option v-for="session in sessions" :key="session.session_id" :value="session.session_id">
+            {{ session.title }}
+          </option>
+        </select>
         <button @click="createNewSession" class="new-session-btn">+ 新建会话</button>
       </div>
-      <div class="session-list">
-        <div
-          v-for="session in sessions"
-          :key="session.session_id"
-          :class="['session-item', { active: session.session_id === chatStore.sessionId }]"
-          @click="switchSession(session.session_id)"
-        >
-          {{ session.title }}
-        </div>
-      </div>
-      <div class="nav-menu">
-        <router-link to="/knowledge" class="nav-item">
-          📚 知识库管理
-        </router-link>
-        <router-link to="/chat" class="nav-item">
-          💬 智能问答
-        </router-link>
-        <router-link 
-          v-if="userStore.role === 'admin'" 
-          to="/users" 
-          class="nav-item"
-        >
-          👥 用户管理
-        </router-link>
-      </div>
-      <div class="user-info">
-        <span>{{ userStore.username }}</span>
-        <button @click="handleLogout" class="logout-btn">退出登录</button>
-      </div>
-    </aside>
+    </div>
 
     <!-- 主聊天区域 -->
     <main class="chat-main">
@@ -98,41 +73,33 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
-import { useUserStore } from '@/stores/user'
+import { ref, onMounted, nextTick, watch } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { chatApi, sessionApi } from '@/api'
 import { marked } from 'marked'
 
-const router = useRouter()
-const userStore = useUserStore()
 const chatStore = useChatStore()
 
 const inputMessage = ref('')
-const sessions = ref<any[]>([])
 const messagesContainer = ref<HTMLElement | null>(null)
+const sessions = ref<any[]>([])
+const currentSessionId = ref('')
 
 onMounted(async () => {
-  console.log('用户ID:', userStore.userId)
-  // 加载会话列表
   await loadSessions()
-  console.log('会话列表:', sessions.value)
   // 如果没有会话，创建一个新会话
   if (sessions.value.length === 0) {
-    console.log('没有会话，创建一个新会话')
     await createNewSession()
   } else {
-    console.log('有会话，切换到第一个会话')
-    // 切换到第一个会话
-    console.log('切换到第一个会话:', sessions.value[0].session_id)
-    chatStore.setSessionId(sessions.value[0].session_id)
+    currentSessionId.value = sessions.value[0].session_id
+    chatStore.setSessionId(currentSessionId.value)
   }
 })
-// 加载会话
+
 async function loadSessions() {
   try {
-    const response = await sessionApi.getSessionList(userStore.userId)
+    const userId = localStorage.getItem('userId') || ''
+    const response = await sessionApi.getSessionList(userId)
     sessions.value = response.sessions || []
   } catch (err) {
     console.error('加载会话失败:', err)
@@ -141,19 +108,22 @@ async function loadSessions() {
 
 async function createNewSession() {
   try {
-    const response = await sessionApi.createSession(userStore.userId)
+    const userId = localStorage.getItem('userId') || ''
+    const response = await sessionApi.createSession(userId)
     if (response.success) {
       chatStore.setSessionId(response.session_id)
       chatStore.clearMessages()
       await loadSessions()
+      currentSessionId.value = response.session_id
     }
   } catch (err) {
     console.error('创建会话失败:', err)
   }
 }
 
-async function switchSession(sessionId: string) {
-  chatStore.setSessionId(sessionId)
+async function switchSession() {
+  if (!currentSessionId.value) return
+  chatStore.setSessionId(currentSessionId.value)
   chatStore.clearMessages()
   // TODO: 加载历史消息
 }
@@ -207,13 +177,6 @@ async function sendMessage() {
     const errorMsg = err.message || '抱歉，发送消息失败，请稍后重试。'
     chatStore.updateLastMessage(errorMsg)
     chatStore.setLoading(false)
-    
-    // 如果是 401 错误，跳转到登录页
-    if (err.message?.includes('未授权')) {
-      setTimeout(() => {
-        handleLogout()
-      }, 1500)
-    }
   }
 }
 
@@ -243,12 +206,6 @@ function scrollToBottom() {
   }
 }
 
-function handleLogout() {
-  userStore.clearUserInfo()
-  chatStore.clearMessages()
-  router.push('/login')
-}
-
 // 渲染 Markdown
 function renderMarkdown(content: string) {
   if (!content) return ''
@@ -258,115 +215,53 @@ function renderMarkdown(content: string) {
 
 <style scoped>
 .chat-container {
-  display: flex;
-  height: 100vh;
-  background: #f5f5f5;
-}
-
-.sidebar {
-  width: 280px;
-  background: white;
-  border-right: 1px solid #e0e0e0;
+  height: 100%;
   display: flex;
   flex-direction: column;
 }
 
-.sidebar-header {
-  padding: 20px;
-  border-bottom: 1px solid #e0e0e0;
+.session-bar {
+  padding: 15px 20px;
+  background: white;
+  border-bottom: 1px solid #e8e8e8;
 }
 
-.sidebar-header h2 {
-  margin: 0 0 10px 0;
-  font-size: 18px;
-  color: #333;
+.session-selector {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.session-select {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+}
+
+.session-select:focus {
+  outline: none;
+  border-color: #667eea;
 }
 
 .new-session-btn {
-  width: 100%;
-  padding: 10px;
+  padding: 8px 16px;
   background: #667eea;
   color: white;
   border: none;
-  border-radius: 5px;
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: all 0.2s;
 }
 
 .new-session-btn:hover {
   background: #5568d3;
-}
-
-.session-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 10px;
-}
-
-.session-item {
-  padding: 12px;
-  margin-bottom: 5px;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background 0.2s;
-  color: #555;
-}
-
-.session-item:hover {
-  background: #f0f0f0;
-}
-
-.session-item.active {
-  background: #e8eaf6;
-  color: #667eea;
-  font-weight: 500;
-}
-
-.nav-menu {
-  padding: 10px;
-  border-top: 1px solid #e0e0e0;
-}
-
-.nav-item {
-  display: block;
-  padding: 12px;
-  margin-bottom: 5px;
-  border-radius: 5px;
-  text-decoration: none;
-  color: #555;
-  transition: background 0.2s;
-}
-
-.nav-item:hover {
-  background: #f0f0f0;
-}
-
-.nav-item.router-link-active {
-  background: #e8eaf6;
-  color: #667eea;
-  font-weight: 500;
-}
-
-.user-info {
-  padding: 15px;
-  border-top: 1px solid #e0e0e0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.logout-btn {
-  padding: 6px 12px;
-  background: #f44336;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.logout-btn:hover {
-  background: #d32f2f;
+  transform: translateY(-1px);
 }
 
 .chat-main {

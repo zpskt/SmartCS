@@ -1,29 +1,7 @@
 <template>
   <div class="user-management">
-    <!-- 侧边栏 -->
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <h2>管理后台</h2>
-      </div>
-      <div class="nav-menu">
-        <router-link to="/chat" class="nav-item">
-          💬 智能问答
-        </router-link>
-        <router-link to="/knowledge" class="nav-item">
-          📚 知识库管理
-        </router-link>
-        <router-link to="/users" class="nav-item active">
-          👥 用户管理
-        </router-link>
-      </div>
-      <div class="user-info">
-        <span>{{ userStore.username }}</span>
-        <button @click="handleLogout" class="logout-btn">退出登录</button>
-      </div>
-    </aside>
-
     <!-- 主内容区域 -->
-    <main class="main-content">
+    <div class="content-wrapper">
       <div class="content-header">
         <h1>用户管理</h1>
         <button @click="showCreateModal = true" class="create-btn">+ 创建用户</button>
@@ -90,7 +68,7 @@
           <p>暂无用户数据</p>
         </div>
       </div>
-    </main>
+    </div>
 
     <!-- 创建用户模态框 -->
     <div v-if="showCreateModal" class="modal-overlay" @click.self="closeModal">
@@ -313,81 +291,8 @@ function handleLogout() {
 
 <style scoped>
 .user-management {
-  display: flex;
-  height: 100vh;
-  background: #f5f5f5;
-}
-
-.sidebar {
-  width: 280px;
-  background: white;
-  border-right: 1px solid #e0e0e0;
-  display: flex;
-  flex-direction: column;
-}
-
-.sidebar-header {
-  padding: 20px;
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.sidebar-header h2 {
-  margin: 0;
-  font-size: 18px;
-  color: #333;
-}
-
-.nav-menu {
-  flex: 1;
-  padding: 10px;
-}
-
-.nav-item {
-  display: block;
-  padding: 12px;
-  margin-bottom: 5px;
-  border-radius: 5px;
-  text-decoration: none;
-  color: #555;
-  transition: background 0.2s;
-}
-
-.nav-item:hover {
-  background: #f0f0f0;
-}
-
-.nav-item.active {
-  background: #e8eaf6;
-  color: #667eea;
-  font-weight: 500;
-}
-
-.user-info {
-  padding: 15px;
-  border-top: 1px solid #e0e0e0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.logout-btn {
-  padding: 6px 12px;
-  background: #f44336;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.logout-btn:hover {
-  background: #d32f2f;
-}
-
-.main-content {
-  flex: 1;
   padding: 30px;
-  overflow-y: auto;
+  height: 100%;
 }
 
 .content-header {
