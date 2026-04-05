@@ -76,6 +76,10 @@ export interface SessionInfo {
   created_at: string
 }
 
+export interface SessionUpdateRequest {
+  title: string
+}
+
 export interface UserInfo {
   id: string
   username: string
@@ -246,8 +250,14 @@ export const sessionApi = {
     return apiClient.get(`/session/${sessionId}/messages`)
   },
   
+  // 清空会话消息
   clearSession(sessionId: string) {
-    return apiClient.delete(`/session/${sessionId}/messages`)
+    return apiClient.post(`/session/${sessionId}/clear`)
+  },
+  
+  // 更新会话名称
+  updateSession(sessionId: string, data: SessionUpdateRequest) {
+    return apiClient.put(`/session/${sessionId}`, data)
   },
 }
 

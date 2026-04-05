@@ -131,6 +131,11 @@ class SessionCreateRequest(BaseModel):
     title: str = "新会话"
 
 
+class SessionUpdateRequest(BaseModel):
+    """更新会话请求"""
+    title: str
+
+
 class FeishuSyncRequest(BaseModel):
     folder_token: str
     user_id: str
@@ -497,7 +502,7 @@ async def delete_session(
     session_id: str,
     user_id: str = Depends(verify_token)
 ):
-    """删除会话"""
+    """删除会话（软删除）"""
     logger.info(f"🗑️ 删除会话 | 用户: {user_id} | 会话ID: {session_id}")
     rag_system = get_enterprise_rag_system()
     result = rag_system.delete_session(session_id)
@@ -508,6 +513,95 @@ async def delete_session(
     
     logger.info(f"✅ 会话删除成功 | 会话ID: {session_id}")
     return result
+
+
+@app.post("/api/session/{session_id}/clear")
+async def clear_session_messages(
+    session_id: str,
+    user_id: str = Depends(verify_token)
+):
+    """删除会话（逻辑删除）"""
+    logger.info(f"🗑️ 删除会话 | 用户: {user_id} | 会话ID: {session_id}")
+    
+    rag_system = get_enterprise_rag_system()
+    session_manager = rag_system.session_manager
+    
+    # 获取会话信息
+    session = session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    
+    # 验证权限：只能操作自己的会话
+    if session.user_id != user_id:
+        logger.warning(f"⚠️ 权限不足 | 用户: {user_id} 尝试删除会话: {session_id}")
+        raise HTTPException(status_code=403, detail="无权操作此会话")
+    
+    # 检查是否至少保留一个会话
+    all_sessions = session_manager.get_user_sessions(user_id)
+    active_sessions = [s for s in all_sessions if s.is_active]
+    if len(active_sessions) <= 1:
+        raise HTTPException(status_code=400, detail="至少保留一个会话")
+    
+    # 逻辑删除会话（标记为不活跃）
+    success = session_manager.delete_session(session_id)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="删除会话失败")
+    
+    logger.info(f"✅ 会话删除成功 | 会话ID: {session_id}")
+    return {
+        "success": True,
+        "message": "会话已删除",
+        "session_id": session_id
+    }
+
+
+@app.put("/api/session/{session_id}")
+async def update_session(
+    session_id: str,
+    request: SessionUpdateRequest,
+    user_id: str = Depends(verify_token)
+):
+    """修改会话名称"""
+    logger.info(f"✏️ 修改会话名称 | 用户: {user_id} | 会话ID: {session_id} | 新名称: {request.title}")
+    
+    rag_system = get_enterprise_rag_system()
+    session_manager = rag_system.session_manager
+    
+    # 获取会话信息
+    session = session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    
+    # 验证权限：只能修改自己的会话
+    if session.user_id != user_id:
+        logger.warning(f"⚠️ 权限不足 | 用户: {user_id} 尝试修改会话: {session_id}")
+        raise HTTPException(status_code=403, detail="无权操作此会话")
+    
+    # 更新会话标题
+    import sqlite3
+    from datetime import datetime
+    
+    conn = session_manager.conn
+    cursor = conn.cursor()
+    cursor.execute(
+        'UPDATE sessions SET title = ?, updated_at = ? WHERE session_id = ?',
+        (request.title, datetime.now().isoformat(), session_id)
+    )
+    conn.commit()
+    
+    # 更新缓存
+    if session_id in session_manager.sessions_cache:
+        session_manager.sessions_cache[session_id].title = request.title
+        session_manager.sessions_cache[session_id].updated_at = datetime.now()
+    
+    logger.info(f"✅ 会话名称修改成功 | 会话ID: {session_id}")
+    return {
+        "success": True,
+        "message": "会话名称已修改",
+        "session_id": session_id,
+        "title": request.title
+    }
 
 
 @app.post("/api/session/{session_id}/export")

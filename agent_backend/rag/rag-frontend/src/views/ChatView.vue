@@ -8,7 +8,43 @@
             {{ session.title }}
           </option>
         </select>
+        <button @click="showEditSessionModal = true" class="edit-session-btn" title="修改会话名称">
+          ✏️
+        </button>
         <button @click="createNewSession" class="new-session-btn">+ 新建会话</button>
+        <button 
+          @click="deleteCurrentSession" 
+          class="delete-session-btn"
+          :disabled="sessions.length <= 1"
+          title="删除当前会话"
+        >
+          🗑️
+        </button>
+      </div>
+    </div>
+
+    <!-- 修改会话名称模态框 -->
+    <div v-if="showEditSessionModal" class="modal-overlay" @click.self="closeEditSessionModal">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>修改会话名称</h3>
+          <button @click="closeEditSessionModal" class="close-btn">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>会话名称</label>
+            <input 
+              v-model="editSessionTitle" 
+              type="text" 
+              placeholder="请输入会话名称" 
+              @keydown.enter="updateSessionTitle"
+            />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button @click="closeEditSessionModal" class="cancel-btn">取消</button>
+          <button @click="updateSessionTitle" class="submit-btn" :disabled="!editSessionTitle.trim()">保存</button>
+        </div>
       </div>
     </div>
 
@@ -84,6 +120,8 @@ const inputMessage = ref('')
 const messagesContainer = ref<HTMLElement | null>(null)
 const sessions = ref<any[]>([])
 const currentSessionId = ref('')
+const showEditSessionModal = ref(false)
+const editSessionTitle = ref('')
 
 onMounted(async () => {
   await loadSessions()
@@ -150,6 +188,60 @@ async function switchSession() {
   chatStore.clearMessages()
   // 加载选中会话的历史消息
   await loadSessionMessages(currentSessionId.value)
+}
+
+async function deleteCurrentSession() {
+  if (sessions.value.length <= 1) {
+    alert('至少保留一个会话')
+    return
+  }
+  
+  if (!confirm('确定要删除当前会话吗？')) {
+    return
+  }
+  
+  try {
+    await sessionApi.clearSession(currentSessionId.value)
+    
+    // 重新加载会话列表
+    await loadSessions()
+    
+    // 切换到第一个会话
+    if (sessions.value.length > 0) {
+      currentSessionId.value = sessions.value[0].session_id
+      chatStore.setSessionId(currentSessionId.value)
+      await loadSessionMessages(currentSessionId.value)
+    }
+  } catch (err) {
+    console.error('删除会话失败:', err)
+    alert('删除会话失败')
+  }
+}
+
+function showEditSessionDialog() {
+  const currentSession = sessions.value.find(s => s.session_id === currentSessionId.value)
+  if (currentSession) {
+    editSessionTitle.value = currentSession.title
+    showEditSessionModal.value = true
+  }
+}
+
+async function updateSessionTitle() {
+  if (!editSessionTitle.value.trim()) return
+  
+  try {
+    await sessionApi.updateSession(currentSessionId.value, { title: editSessionTitle.value })
+    closeEditSessionModal()
+    await loadSessions()
+  } catch (err) {
+    console.error('更新会话名称失败:', err)
+    alert('更新会话名称失败')
+  }
+}
+
+function closeEditSessionModal() {
+  showEditSessionModal.value = false
+  editSessionTitle.value = ''
 }
 
 async function sendMessage() {
@@ -291,6 +383,43 @@ function renderMarkdown(content: string) {
 .new-session-btn:hover {
   background: #5568d3;
   transform: translateY(-1px);
+}
+
+.edit-session-btn {
+  padding: 8px 12px;
+  background: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+
+.edit-session-btn:hover {
+  background: #45a049;
+  transform: translateY(-1px);
+}
+
+.delete-session-btn {
+  padding: 8px 12px;
+  background: #f44336;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+
+.delete-session-btn:hover:not(:disabled) {
+  background: #d32f2f;
+  transform: translateY(-1px);
+}
+
+.delete-session-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .chat-main {
@@ -532,6 +661,125 @@ function renderMarkdown(content: string) {
 }
 
 .send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 模态框样式 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: #999;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.close-btn:hover {
+  color: #333;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #333;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 20px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.cancel-btn {
+  padding: 10px 20px;
+  background: #f5f5f5;
+  color: #333;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.cancel-btn:hover {
+  background: #e0e0e0;
+}
+
+.submit-btn {
+  padding: 10px 20px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.submit-btn:hover:not(:disabled) {
+  background: #5568d3;
+}
+
+.submit-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
