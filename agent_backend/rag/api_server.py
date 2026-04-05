@@ -136,6 +136,25 @@ class FeishuSyncRequest(BaseModel):
     user_id: str
 
 
+class UserCreateRequest(BaseModel):
+    """创建用户请求"""
+    user_id: str
+    username: str
+    password: str
+    role: str = "user"  # admin, user
+
+
+class UserUpdateRequest(BaseModel):
+    """更新用户请求"""
+    password: Optional[str] = None
+    role: Optional[str] = None
+
+
+class UserDeleteRequest(BaseModel):
+    """删除用户请求"""
+    user_id: str
+
+
 # ========== 认证依赖 ==========
 async def verify_token(x_authorization: Optional[str] = Header(None)):
     """验证 Token（简化版，实际应该更复杂）"""
@@ -540,6 +559,174 @@ async def health_check():
         "status": "healthy",
         "version": "1.0.0"
     }
+
+
+# ========== 用户管理路由 ==========
+
+@app.post("/api/users/create")
+async def create_user(
+    request: UserCreateRequest,
+    current_user_id: str = Depends(verify_token)
+):
+    """创建新用户（需要管理员权限）"""
+    logger.info(f"👤 创建用户 | 操作者: {current_user_id} | 新用户ID: {request.user_id}")
+    
+    rag_system = get_enterprise_rag_system()
+    auth_service = rag_system.auth_service
+    
+    # 检查当前用户是否有管理权限
+    if not auth_service.has_permission(current_user_id, "manage_users"):
+        logger.warning(f"⚠️ 权限不足 | 用户: {current_user_id} 尝试创建用户")
+        raise HTTPException(status_code=403, detail="权限不足，需要管理员权限")
+    
+    try:
+        auth_service.add_user(
+            user_id=request.user_id,
+            username=request.username,
+            password=request.password,
+            role=request.role
+        )
+        logger.info(f"✅ 用户创建成功 | 用户ID: {request.user_id}")
+        return {
+            "success": True,
+            "message": "用户创建成功",
+            "user_id": request.user_id
+        }
+    except ValueError as e:
+        logger.warning(f"⚠️ 创建用户失败 | 原因: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"❌ 创建用户失败 | 错误: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"创建失败：{str(e)}")
+
+
+@app.get("/api/users/list")
+async def list_users(current_user_id: str = Depends(verify_token)):
+    """获取所有用户列表（需要管理员权限）"""
+    logger.info(f"📋 获取用户列表 | 操作者: {current_user_id}")
+    
+    rag_system = get_enterprise_rag_system()
+    auth_service = rag_system.auth_service
+    
+    # 检查当前用户是否有管理权限
+    if not auth_service.has_permission(current_user_id, "manage_users"):
+        logger.warning(f"⚠️ 权限不足 | 用户: {current_user_id} 尝试查看用户列表")
+        raise HTTPException(status_code=403, detail="权限不足，需要管理员权限")
+    
+    users = auth_service.list_users()
+    logger.info(f"✅ 返回 {len(users)} 个用户")
+    return {
+        "success": True,
+        "total": len(users),
+        "users": users
+    }
+
+
+@app.get("/api/users/{user_id}")
+async def get_user_detail(
+    user_id: str,
+    current_user_id: str = Depends(verify_token)
+):
+    """获取用户详情（需要管理员权限或查看自己的信息）"""
+    logger.info(f"🔍 获取用户详情 | 操作者: {current_user_id} | 目标用户: {user_id}")
+    
+    rag_system = get_enterprise_rag_system()
+    auth_service = rag_system.auth_service
+    
+    # 检查权限：管理员或查看自己的信息
+    if current_user_id != user_id and not auth_service.has_permission(current_user_id, "manage_users"):
+        logger.warning(f"⚠️ 权限不足 | 用户: {current_user_id} 尝试查看用户: {user_id}")
+        raise HTTPException(status_code=403, detail="权限不足")
+    
+    user = auth_service.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    
+    return {
+        "success": True,
+        "user": user
+    }
+
+# 编辑
+@app.put("/api/users/{user_id}")
+async def update_user(
+    user_id: str,
+    request: UserUpdateRequest,
+    current_user_id: str = Depends(verify_token)
+):
+    """更新用户信息（需要管理员权限）"""
+    logger.info(f"✏️ 更新用户 | 操作者: {current_user_id} | 目标用户: {user_id}")
+    
+    rag_system = get_enterprise_rag_system()
+    auth_service = rag_system.auth_service
+    
+    # 检查当前用户是否有管理权限
+    if not auth_service.has_permission(current_user_id, "manage_users"):
+        logger.warning(f"⚠️ 权限不足 | 用户: {current_user_id} 尝试更新用户: {user_id}")
+        raise HTTPException(status_code=403, detail="权限不足，需要管理员权限")
+    
+    # 检查用户是否存在
+    existing_user = auth_service.get_user_by_id(user_id)
+    if not existing_user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    
+    try:
+        # 更新密码
+        if request.password is not None:
+            auth_service.update_user_password(user_id, request.password)
+            logger.info(f"🔑 密码已更新 | 用户: {user_id}")
+        
+        # 更新角色
+        if request.role is not None and request.role != existing_user['role']:
+            auth_service.update_user_role(user_id, request.role)
+            logger.info(f"🔄 角色更新成功 | 用户: {user_id} | 新角色: {request.role}")
+        
+        logger.info(f"✅ 用户更新成功 | 用户ID: {user_id}")
+        return {
+            "success": True,
+            "message": "用户更新成功"
+        }
+    except Exception as e:
+        logger.error(f"❌ 更新用户失败 | 错误: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"更新失败：{str(e)}")
+
+
+@app.post("/api/users/delete")
+async def delete_user(
+    request: UserDeleteRequest,
+    current_user_id: str = Depends(verify_token)
+):
+    """删除用户（需要管理员权限）"""
+    logger.info(f"🗑️ 删除用户 | 操作者: {current_user_id} | 目标用户: {request.user_id}")
+    
+    rag_system = get_enterprise_rag_system()
+    auth_service = rag_system.auth_service
+    
+    # 检查当前用户是否有管理权限
+    if not auth_service.has_permission(current_user_id, "manage_users"):
+        logger.warning(f"⚠️ 权限不足 | 用户: {current_user_id} 尝试删除用户: {request.user_id}")
+        raise HTTPException(status_code=403, detail="权限不足，需要管理员权限")
+    
+    # 不能删除自己
+    if request.user_id == current_user_id:
+        logger.warning(f"⚠️ 非法操作 | 用户: {current_user_id} 尝试删除自己")
+        raise HTTPException(status_code=400, detail="不能删除当前登录用户")
+    
+    # 检查用户是否存在
+    existing_user = auth_service.get_user_by_id(request.user_id)
+    if not existing_user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    
+    try:
+        auth_service.remove_user(request.user_id)
+        logger.info(f"✅ 用户删除成功 | 用户ID: {request.user_id}")
+        return {
+            "success": True,
+            "message": "用户删除成功"
+        }
+    except Exception as e:
+        logger.error(f"❌ 删除用户失败 | 错误: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"删除失败：{str(e)}")
 
 
 # ========== 主函数 ==========

@@ -23,6 +23,13 @@
         <router-link to="/chat" class="nav-item">
           💬 智能问答
         </router-link>
+        <router-link 
+          v-if="userStore.role === 'admin'" 
+          to="/users" 
+          class="nav-item"
+        >
+          👥 用户管理
+        </router-link>
       </div>
       <div class="user-info">
         <span>{{ userStore.username }}</span>

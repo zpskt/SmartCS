@@ -76,6 +76,21 @@ export interface SessionInfo {
   created_at: string
 }
 
+export interface UserInfo {
+  id: string
+  username: string
+  role: string
+  created_at: string
+}
+
+export interface UserCreateRequest {
+  user_id: string
+  username: string
+  password: string
+  role: string
+  current_user_id: string
+}
+
 export const authApi = {
   login(data: LoginRequest): Promise<LoginResponse> {
     return apiClient.post('/auth/login', data)
@@ -228,5 +243,32 @@ export const sessionApi = {
   
   clearSession(sessionId: string) {
     return apiClient.delete(`/session/${sessionId}/messages`)
+  },
+}
+
+export const userApi = {
+  // 获取用户列表（仅 admin）
+  getUserList(): Promise<{ users: UserInfo[] }> {
+    return apiClient.get('/users/list')
+  },
+  
+  // 获取用户详情（仅 admin）
+  getUserDetail(userId: string): Promise<UserInfo> {
+    return apiClient.get(`/users/${userId}`)
+  },
+  
+  // 创建用户（仅 admin）
+  createUser(data: UserCreateRequest) {
+    return apiClient.post('/users/create', data)
+  },
+  
+  // 更新用户（仅 admin）
+  updateUser(userId: string, data: Partial<UserCreateRequest>) {
+    return apiClient.put(`/users/${userId}`, data)
+  },
+  
+  // 删除用户（仅 admin）
+  deleteUser(userId: string) {
+    return apiClient.post('/users/delete', { user_id: userId })
   },
 }

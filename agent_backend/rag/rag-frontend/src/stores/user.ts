@@ -5,7 +5,7 @@ export const useUserStore = defineStore('user', () => {
   // 从 localStorage 恢复用户信息
   const userId = ref<string>(localStorage.getItem('userId') || '')
   const username = ref<string>(localStorage.getItem('username') || '')
-  const role = ref<string>('')
+  const role = ref<string>(localStorage.getItem('role') || '')
   const token = ref<string>(localStorage.getItem('token') || '')
   const isLoggedIn = ref<boolean>(!!localStorage.getItem('token'))
 
@@ -19,6 +19,7 @@ export const useUserStore = defineStore('user', () => {
     localStorage.setItem('token', userToken)
     localStorage.setItem('userId', id)
     localStorage.setItem('username', name)
+    localStorage.setItem('role', userRole)
   }
 
   function clearUserInfo() {
@@ -31,6 +32,7 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem('token')
     localStorage.removeItem('userId')
     localStorage.removeItem('username')
+    localStorage.removeItem('role')
   }
 
   return {
