@@ -2,7 +2,7 @@
   <div class="knowledge-container">
     <div class="header">
       <div class="header-content">
-        <button @click="goBack" class="back-btn">← 返回</button>
+<!--        <button @click="goBack" class="back-btn">← 返回</button>-->
         <h1>知识库管理</h1>
       </div>
     </div>

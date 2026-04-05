@@ -191,7 +191,14 @@ async function loadUsers() {
 
 async function createUser() {
   try {
-    await userApi.createUser(newUser.value)
+    const createData = {
+      user_id: newUser.value.username,
+      username: newUser.value.username,
+      password: newUser.value.password,
+      role: newUser.value.role,
+      current_user_id: userStore.userId
+    }
+    await userApi.createUser(createData)
     alert('创建成功')
     closeModal()
     await loadUsers()

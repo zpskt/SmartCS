@@ -8,6 +8,11 @@ const userStore = useUserStore()
 
 // 判断是否显示全局布局（登录页不显示）
 const showLayout = computed(() => route.path !== '/login')
+
+function handleLogout() {
+  userStore.clearUserInfo()
+  window.location.href = '/login'
+}
 </script>
 
 <template>
