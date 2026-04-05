@@ -372,16 +372,12 @@ async def upload_knowledge_file(
     metadata: Optional[str] = None,
     user_id: str = Depends(verify_token)
 ):
-    """上传文件到知识库"""
+    """上传文件到知识库（支持 CSV、Excel、TXT、MD 等）"""
     logger.info(f"📤 上传文件 | 用户: {user_id} | 文件名: {file.filename}")
     
     try:
         # 读取文件内容
         content = await file.read()
-        text_content = content.decode('utf-8', errors='ignore')
-        
-        if not text_content.strip():
-            raise HTTPException(status_code=400, detail="文件内容为空")
         
         # 解析元数据
         parsed_metadata = {}
@@ -391,11 +387,11 @@ async def upload_knowledge_file(
             except json.JSONDecodeError:
                 raise HTTPException(status_code=400, detail="元数据格式错误，请使用有效的 JSON")
         
-        # 调用 RAG 系统处理文件
+        # 调用 RAG 系统处理文件（自动识别文件类型并选择合适的分割策略）
         rag_system = get_enterprise_rag_system()
         result = rag_system.upload_file_to_knowledge(
             filename=file.filename,
-            content=text_content,
+            content=content,  # 传递原始字节，让后端处理
             created_by=user_id,
             metadata=parsed_metadata
         )

@@ -255,29 +255,83 @@ class EnterpriseRAGSystem:
     def upload_file_to_knowledge(
         self,
         filename: str,
-        content: str,
+        content: bytes | str,  # 支持字节或字符串
         created_by: str,
         metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        上传文件到知识库
+        上传文件到知识库（自动识别文件类型）
         
         :param filename: 文件名
-        :param content: 文件内容
+        :param content: 文件内容（字节或字符串）
         :param created_by: 创建者
         :param metadata: 额外元数据
         :return: 上传结果
         """
         try:
-            logger.debug(f"上传文件: {filename} (大小: {len(content)} 字符)")
+            logger.debug(f"上传文件: {filename} (大小: {len(content) if isinstance(content, str) else len(content)} bytes)")
             
             # 使用文件名作为标题（去除扩展名）
             title = os.path.splitext(filename)[0]
+            file_ext = os.path.splitext(filename)[1].lower()
             
+            # 根据文件类型处理内容
+            source_type = "upload"
+            
+            if file_ext in ['.csv', '.xlsx', '.xls']:
+                # CSV/Excel 文件：按行处理
+                import io
+                import pandas as pd
+                
+                try:
+                    if isinstance(content, bytes):
+                        # Excel 文件
+                        if file_ext in ['.xlsx', '.xls']:
+                            df = pd.read_excel(io.BytesIO(content))
+                        else:
+                            # CSV 文件
+                            df = pd.read_csv(io.BytesIO(content))
+                    else:
+                        # 字符串格式的 CSV
+                        df = pd.read_csv(io.StringIO(content))
+                    
+                    # 将每一行转换为文本
+                    rows_text = []
+                    for idx, row in df.iterrows():
+                        # 构建每行的描述文本
+                        row_parts = [f"{col}: {val}" for col, val in row.items() if pd.notna(val)]
+                        row_text = ", ".join(row_parts)
+                        rows_text.append(row_text)
+                    
+                    # 用换行符连接所有行
+                    text_content = "\n\n".join(rows_text)
+                    logger.info(f"CSV/Excel 解析成功: {len(rows_text)} 行")
+                    
+                except Exception as e:
+                    logger.error(f"CSV/Excel 解析失败: {e}")
+                    # 如果解析失败，尝试当作普通文本
+                    if isinstance(content, bytes):
+                        text_content = content.decode('utf-8', errors='ignore')
+                    else:
+                        text_content = content
+            else:
+                # 其他文件类型：直接解码为文本
+                if isinstance(content, bytes):
+                    text_content = content.decode('utf-8', errors='ignore')
+                else:
+                    text_content = content
+            
+            if not text_content.strip():
+                return {
+                    "success": False,
+                    "message": "文件内容为空"
+                }
+            
+            # 调用知识库服务添加文档（会自动选择合适的分块策略）
             doc = self.knowledge_base.add_document(
                 title=title,
-                content=content,
-                source_type="upload",
+                content=text_content,
+                source_type=source_type,
                 created_by=created_by,
                 source_url=None,
                 metadata=metadata or {}
