@@ -2,6 +2,7 @@
 import { RouterView, useRoute } from 'vue-router'
 import { computed } from 'vue'
 import { useUserStore } from '@/stores/user'
+import { APP_CONFIG, ROLE_TEXTS, BUTTON_TEXTS } from '@/config'
 
 const route = useRoute()
 const userStore = useUserStore()
@@ -19,11 +20,11 @@ function handleLogout() {
   <div v-if="showLayout" class="app-layout">
     <!-- 顶部栏 -->
     <header class="top-bar">
-      <div class="logo">企业知识库 RAG 系统</div>
+      <div class="logo">{{ APP_CONFIG.SYSTEM_NAME }}</div>
       <div class="user-section">
         <span class="username">{{ userStore.username }}</span>
-        <span class="role-badge">{{ userStore.role === 'admin' ? '管理员' : '用户' }}</span>
-        <button @click="handleLogout" class="logout-btn">退出</button>
+        <span class="role-badge">{{ userStore.role === 'admin' ? ROLE_TEXTS.ADMIN : ROLE_TEXTS.USER }}</span>
+        <button @click="handleLogout" class="logout-btn">{{ BUTTON_TEXTS.LOGOUT }}</button>
       </div>
     </header>
 
