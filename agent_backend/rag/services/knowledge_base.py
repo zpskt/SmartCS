@@ -7,7 +7,7 @@ import json
 import hashlib
 from datetime import datetime
 from typing import List, Dict, Optional, Any
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
 from config.settings import settings
 from models.schemas import KnowledgeDocument
 from stores.vector_store import VectorStoreService
@@ -19,11 +19,31 @@ class KnowledgeBaseService:
     def __init__(self):
         """初始化知识库管理服务"""
         self.vector_store = VectorStoreService()
+        
+        # 通用文本分割器（用于 CSV、纯文本等）
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=settings.CHUNK_SIZE,
             chunk_overlap=settings.CHUNK_OVERLAP,
             separators=["\n\n", "\n", "。", "！", "？", ".", "!", "?"]
         )
+        
+        # Markdown 文档结构分割器（按标题层级分割）
+        self.markdown_splitter = MarkdownHeaderTextSplitter(
+            headers_to_split_on=[
+                ("#", "Header_1"),
+                ("##", "Header_2"),
+                ("###", "Header_3"),
+                ("####", "Header_4"),
+            ]
+        )
+        
+        # Markdown 分割后的二次分割器（防止单个章节过大）
+        self.markdown_text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=settings.CHUNK_SIZE,
+            chunk_overlap=settings.CHUNK_OVERLAP,
+            separators=["\n\n", "\n", "。", "！", "？", ".", "!", "?", " ", ""]
+        )
+        
         self.md5_file_path = "./data/rag_md5.txt"
         
         # 确保目录存在
@@ -85,8 +105,13 @@ class KnowledgeBaseService:
         if self._check_md5_exists(md5_hex):
             raise ValueError("文档内容已存在")
         
-        # 文本分块
-        chunks = self.text_splitter.split_text(content)
+        # 根据来源类型选择分块策略
+        if source_type == "feishu" or title.lower().endswith('.md'):
+            # Markdown 格式：按文档结构分割
+            chunks = self._split_markdown_content(content)
+        else:
+            # 其他格式：按固定大小和标点分割
+            chunks = self.text_splitter.split_text(content)
         
         # 计算文件大小
         file_size = len(content.encode('utf-8'))
@@ -134,6 +159,46 @@ class KnowledgeBaseService:
         self._save_md5(md5_hex)
         
         return doc
+    
+    def _split_markdown_content(self, content: str) -> List[str]:
+        """
+        按 Markdown 文档结构分割
+        
+        :param content: Markdown 内容
+        :return: 分块列表
+        """
+        try:
+            # 第一步：按标题层级分割
+            markdown_documents = self.markdown_splitter.split_text(content)
+            
+            chunks = []
+            for doc in markdown_documents:
+                # 获取标题信息
+                headers = []
+                for level in range(1, 5):
+                    header_key = f"Header_{level}"
+                    if header_key in doc.metadata:
+                        headers.append(doc.metadata[header_key])
+                
+                # 构建带标题前缀的内容
+                header_prefix = " > ".join(headers) + "\n\n" if headers else ""
+                full_chunk = header_prefix + doc.page_content
+                
+                # 第二步：如果单个章节过大，进行二次分割
+                if len(full_chunk) > settings.CHUNK_SIZE:
+                    sub_chunks = self.markdown_text_splitter.split_text(full_chunk)
+                    chunks.extend(sub_chunks)
+                else:
+                    chunks.append(full_chunk)
+            
+            # 如果没有分割成功（可能是没有标题的 Markdown），使用通用分割器
+            if not chunks:
+                chunks = self.text_splitter.split_text(content)
+            
+            return chunks
+        except Exception as e:
+            print(f"Markdown 分割失败，使用通用分割器: {e}")
+            return self.text_splitter.split_text(content)
     
     def add_documents_from_feishu(
         self,
