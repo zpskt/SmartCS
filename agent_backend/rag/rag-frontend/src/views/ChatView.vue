@@ -93,6 +93,8 @@ onMounted(async () => {
   } else {
     currentSessionId.value = sessions.value[0].session_id
     chatStore.setSessionId(currentSessionId.value)
+    // 加载第一个会话的消息
+    await loadSessionMessages(currentSessionId.value)
   }
 })
 
@@ -103,6 +105,27 @@ async function loadSessions() {
     sessions.value = response.sessions || []
   } catch (err) {
     console.error('加载会话失败:', err)
+  }
+}
+
+async function loadSessionMessages(sessionId: string) {
+  try {
+    const response = await sessionApi.getSessionMessages(sessionId)
+    const messages = response.messages || []
+    
+    // 清空当前消息
+    chatStore.clearMessages()
+    
+    // 添加历史消息
+    messages.forEach((msg: any) => {
+      chatStore.addMessage({
+        role: msg.role,
+        content: msg.content,
+        sources: msg.sources
+      })
+    })
+  } catch (err) {
+    console.error('加载消息失败:', err)
   }
 }
 
@@ -125,7 +148,8 @@ async function switchSession() {
   if (!currentSessionId.value) return
   chatStore.setSessionId(currentSessionId.value)
   chatStore.clearMessages()
-  // TODO: 加载历史消息
+  // 加载选中会话的历史消息
+  await loadSessionMessages(currentSessionId.value)
 }
 
 async function sendMessage() {

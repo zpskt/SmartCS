@@ -149,7 +149,7 @@ class SessionManager:
         if session_id in self.sessions_cache:
             session = self.sessions_cache[session_id]
             # 加载消息
-            session.messages = self._load_messages(session_id)
+            session.messages = self.load_messages(session_id)
             return session
         
         # 从数据库获取
@@ -164,7 +164,7 @@ class SessionManager:
             session_id=row['session_id'],
             user_id=row['user_id'],
             title=row['title'],
-            messages=self._load_messages(session_id),
+            messages=self.load_messages(session_id),
             created_at=datetime.fromisoformat(row['created_at']),
             updated_at=datetime.fromisoformat(row['updated_at']),
             metadata=json.loads(row['metadata']),
@@ -180,7 +180,7 @@ class SessionManager:
         
         return session
     
-    def _load_messages(self, session_id: str) -> List[Dict[str, any]]:
+    def load_messages(self, session_id: str) -> List[Dict[str, any]]:
         """加载会话的消息列表"""
         cursor = self.conn.cursor()
         cursor.execute("""

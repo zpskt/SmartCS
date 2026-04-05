@@ -237,8 +237,13 @@ export const sessionApi = {
     return apiClient.post('/session/create', { user_id: userId, title })
   },
   // 根据userId获取会话连接
-  getSessionList(userId: string): Promise<SessionInfo[]> {
+  getSessionList(userId: string): Promise<{ sessions: SessionInfo[] }> {
     return apiClient.get(`/session/list`, { params: { user_id: userId } })
+  },
+  
+  // 获取会话消息列表
+  getSessionMessages(sessionId: string): Promise<{ messages: any[] }> {
+    return apiClient.get(`/session/${sessionId}/messages`)
   },
   
   clearSession(sessionId: string) {

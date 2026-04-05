@@ -458,6 +458,40 @@ async def list_sessions(user_id: str = Depends(verify_token)):
     return {"sessions": sessions}
 
 
+@app.get("/api/session/{session_id}/messages")
+async def get_session_messages(
+    session_id: str,
+    user_id: str = Depends(verify_token)
+):
+    """获取会话的聊天记录"""
+    logger.info(f"💬 获取会话消息 | 用户: {user_id} | 会话ID: {session_id}")
+    
+    rag_system = get_enterprise_rag_system()
+    session_manager = rag_system.session_manager
+    
+    # 获取会话信息
+    session = session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    
+    # 验证权限：只能查看自己的会话
+    if session.user_id != user_id:
+        logger.warning(f"⚠️ 权限不足 | 用户: {user_id} 尝试查看会话: {session_id}")
+        raise HTTPException(status_code=403, detail="无权查看此会话")
+    
+    # 加载消息
+    messages = session_manager.load_messages(session_id)
+    logger.info(f"✅ 返回 {len(messages)} 条消息")
+    
+    return {
+        "success": True,
+        "session_id": session_id,
+        "title": session.title,
+        "total_messages": len(messages),
+        "messages": messages
+    }
+
+
 @app.delete("/api/session/{session_id}")
 async def delete_session(
     session_id: str,
