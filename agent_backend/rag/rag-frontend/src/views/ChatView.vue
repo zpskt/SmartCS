@@ -53,8 +53,20 @@
       <!-- 消息列表 -->
       <div class="messages-container" ref="messagesContainer">
         <div v-if="chatStore.messages.length === 0" class="welcome-message">
-          <h3>欢迎使用企业知识库 RAG 系统</h3>
-          <p>您可以问我任何关于产品、服务的问题</p>
+          <h3>{{ WELCOME_MESSAGES.CHAT_TITLE }}</h3>
+          <p>{{ WELCOME_MESSAGES.CHAT_SUBTITLE }}</p>
+          
+          <!-- 预设问题 -->
+          <div class="preset-questions">
+            <button 
+              v-for="(question, index) in PRESET_QUESTIONS" 
+              :key="index"
+              @click="sendPresetQuestion(question)"
+              class="preset-question-btn"
+            >
+              {{ question }}
+            </button>
+          </div>
         </div>
         
         <div
@@ -113,6 +125,7 @@ import { ref, onMounted, nextTick, watch } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { chatApi, sessionApi } from '@/api'
 import { marked } from 'marked'
+import { WELCOME_MESSAGES, PRESET_QUESTIONS } from '@/config'
 
 const chatStore = useChatStore()
 
@@ -327,6 +340,12 @@ function renderMarkdown(content: string) {
   if (!content) return ''
   return marked(content)
 }
+
+// 发送预设问题
+function sendPresetQuestion(question: string) {
+  inputMessage.value = question
+  sendMessage()
+}
 </script>
 
 <style scoped>
@@ -442,6 +461,32 @@ function renderMarkdown(content: string) {
 
 .welcome-message h3 {
   margin-bottom: 10px;
+}
+
+.preset-questions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 30px;
+}
+
+.preset-question-btn {
+  padding: 10px 20px;
+  background: white;
+  border: 1px solid #667eea;
+  color: #667eea;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.preset-question-btn:hover {
+  background: #667eea;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
 }
 
 .message {

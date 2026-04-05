@@ -1,7 +1,7 @@
 // 系统配置
 export const APP_CONFIG = {
   // 系统名称
-  SYSTEM_NAME: '企业知识库 RAG 系统',
+  SYSTEM_NAME: '知识库 RAG 系统',
   
   // API 基础地址
   API_BASE_URL: 'http://localhost:8000/api',
@@ -16,9 +16,16 @@ export const PAGE_TITLES = {
 
 // 欢迎消息
 export const WELCOME_MESSAGES = {
-  CHAT_TITLE: '欢迎使用企业知识库 RAG 系统',
+  CHAT_TITLE: '欢迎使用知识库 RAG 系统',
   CHAT_SUBTITLE: '您可以问我任何关于产品、服务的问题',
 }
+
+// 预设问题
+export const PRESET_QUESTIONS = [
+  '**如何配置？',
+  '**如何配置？',
+  '**如何配置？',
+]
 
 // 按钮文本
 export const BUTTON_TEXTS = {
