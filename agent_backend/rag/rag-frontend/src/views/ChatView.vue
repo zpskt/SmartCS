@@ -245,9 +245,14 @@ function renderMarkdown(content: string) {
 }
 
 .session-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
   padding: 15px 20px;
   background: white;
   border-bottom: 1px solid #e8e8e8;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .session-selector {
