@@ -6,6 +6,7 @@ import os
 from typing import List, Dict, Any, Optional
 from langchain_chroma import Chroma
 from langchain_community.embeddings import DashScopeEmbeddings
+from langchain_ollama import OllamaEmbeddings
 from langchain_core.documents import Document
 from config.settings import settings
 
@@ -19,11 +20,17 @@ class VectorStoreService:
         persist_dir = settings.CHROMA_PERSIST_DIR
         os.makedirs(persist_dir, exist_ok=True)
         
-        # 初始化嵌入模型
-        self.embeddings = DashScopeEmbeddings(
-            model=settings.EMBEDDING_MODEL,
-            dashscope_api_key=settings.DASHSCOPE_API_KEY
-        )
+        # 根据配置选择嵌入模型
+        if settings.MODEL_PROVIDER == "ollama":
+            self.embeddings = OllamaEmbeddings(
+                model=settings.OLLAMA_EMBEDDING_MODEL,
+                base_url=settings.OLLAMA_BASE_URL
+            )
+        else:  # dashscope
+            self.embeddings = DashScopeEmbeddings(
+                model=settings.EMBEDDING_MODEL,
+                dashscope_api_key=settings.DASHSCOPE_API_KEY
+            )
         
         # 初始化 Chroma 向量库
         self.vectorstore = Chroma(

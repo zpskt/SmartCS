@@ -8,6 +8,7 @@ from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.agents import create_agent, AgentState
 from langchain_community.chat_models import ChatTongyi
+from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.prebuilt import create_react_agent
 from langchain_core.tools import tool
@@ -26,11 +27,20 @@ class RAGEngine:
         self.retriever = self.vector_store.get_retriever(
             search_kwargs={"k": settings.SIMILARITY_TOP_K}
         )
-        self.chat_model = ChatTongyi(
-            model=settings.CHAT_MODEL,
-            temperature=settings.TEMPERATURE,
-            dashscope_api_key=settings.DASHSCOPE_API_KEY
-        )
+        
+        # 根据配置选择聊天模型
+        if settings.MODEL_PROVIDER == "ollama":
+            self.chat_model = ChatOllama(
+                model=settings.OLLAMA_CHAT_MODEL,
+                base_url=settings.OLLAMA_BASE_URL,
+                temperature=settings.TEMPERATURE
+            )
+        else:  # dashscope
+            self.chat_model = ChatTongyi(
+                model=settings.CHAT_MODEL,
+                temperature=settings.TEMPERATURE,
+                dashscope_api_key=settings.DASHSCOPE_API_KEY
+            )
         
         # 初始化工具列表
         self.tools = [self._create_retrieval_tool()]

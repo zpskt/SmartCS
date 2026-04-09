@@ -15,10 +15,16 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"  # development, production
     
     # ========== 模型配置 ==========
+    MODEL_PROVIDER: str = "dashscope"  # dashscope, ollama
     CHAT_MODEL: str = "qwen-max"
     EMBEDDING_MODEL: str = "text-embedding-v3"
     DASHSCOPE_API_KEY: Optional[str] = None
     TEMPERATURE: float = 0.7
+    
+    # Ollama 配置
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_CHAT_MODEL: str = "qwen2.5:7b"
+    OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"
     
     # ========== 向量数据库配置 ==========
     VECTOR_DB_TYPE: str = "chroma"  # chroma, milvus, weaviate
