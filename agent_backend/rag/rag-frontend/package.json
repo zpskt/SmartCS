@@ -5,7 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:local": "vite --mode local",
+    "dev:dev": "vite --mode dev",
     "build": "run-p type-check \"build-only {@}\" --",
+    "build:dev": "vite build --mode dev",
+    "build:prd": "vite build --mode prd",
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --build"
