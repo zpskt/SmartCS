@@ -353,13 +353,15 @@ function sendPresetQuestion(question: string) {
   height: 100%;
   display: flex;
   flex-direction: column;
+  width: 100%;
+  min-width: 100%;
 }
 
 .session-bar {
   position: sticky;
   top: 0;
   z-index: 100;
-  padding: 15px 20px;
+  padding: 20px 30px;
   background: white;
   border-bottom: 1px solid #e8e8e8;
   flex-shrink: 0;
@@ -368,8 +370,9 @@ function sendPresetQuestion(question: string) {
 
 .session-selector {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
+  width: 100%;
 }
 
 .session-select {
@@ -450,17 +453,25 @@ function sendPresetQuestion(question: string) {
 .messages-container {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: 30px;
+  width: 100%;
 }
 
 .welcome-message {
   text-align: center;
-  margin-top: 100px;
-  color: #999;
+  margin-top: 80px;
+  color: #666;
 }
 
 .welcome-message h3 {
-  margin-bottom: 10px;
+  margin-bottom: 15px;
+  font-size: 24px;
+  color: #333;
+}
+
+.welcome-message p {
+  font-size: 16px;
+  color: #888;
 }
 
 .preset-questions {
@@ -490,7 +501,7 @@ function sendPresetQuestion(question: string) {
 }
 
 .message {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
   display: flex;
 }
 
@@ -503,16 +514,17 @@ function sendPresetQuestion(question: string) {
 }
 
 .message-content {
-  max-width: 70%;
-  padding: 15px;
-  border-radius: 10px;
+  max-width: 75%;
+  padding: 18px 20px;
+  border-radius: 12px;
   background: white;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   color: #333;
+  line-height: 1.6;
 }
 
 .message.user .message-content {
-  background: #667eea;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
 }
 
@@ -668,41 +680,47 @@ function sendPresetQuestion(question: string) {
 }
 
 .input-container {
-  padding: 20px;
+  padding: 24px 30px;
   background: white;
   border-top: 1px solid #e0e0e0;
   display: flex;
-  gap: 10px;
+  gap: 15px;
+  width: 100%;
 }
 
 .input-container textarea {
   flex: 1;
-  padding: 12px;
+  padding: 14px 16px;
   border: 1px solid #ddd;
-  border-radius: 5px;
+  border-radius: 8px;
   resize: none;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 1.5;
 }
 
 .input-container textarea:focus {
   outline: none;
   border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .send-btn {
-  padding: 12px 30px;
-  background: #667eea;
+  padding: 14px 36px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  border-radius: 5px;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 500;
   align-self: flex-end;
+  transition: all 0.2s;
 }
 
 .send-btn:hover:not(:disabled) {
-  background: #5568d3;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
 .send-btn:disabled {

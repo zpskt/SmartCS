@@ -64,23 +64,25 @@ function handleLogout() {
 .app-layout {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  min-height: 100vh;
+  width: 100%;
 }
 
 .top-bar {
-  height: 60px;
+  height: 64px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 30px;
+  padding: 0 40px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   z-index: 100;
+  flex-shrink: 0;
 }
 
 .logo {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 600;
   letter-spacing: 0.5px;
 }
@@ -88,29 +90,30 @@ function handleLogout() {
 .user-section {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 20px;
 }
 
 .username {
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 500;
 }
 
 .role-badge {
-  padding: 4px 12px;
+  padding: 5px 14px;
   background: rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
-  font-size: 12px;
+  border-radius: 14px;
+  font-size: 13px;
   font-weight: 500;
 }
 
 .logout-btn {
-  padding: 6px 16px;
+  padding: 8px 20px;
   background: rgba(255, 255, 255, 0.9);
   color: #667eea;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   transition: all 0.2s;
 }
@@ -125,30 +128,32 @@ function handleLogout() {
   display: flex;
   flex: 1;
   overflow: hidden;
+  width: 100%;
 }
 
 .sidebar {
-  width: 220px;
+  width: 240px;
   background: white;
   border-right: 1px solid #e8e8e8;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+  flex-shrink: 0;
 }
 
 .nav-menu {
-  padding: 20px 0;
+  padding: 24px 0;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 24px;
-  margin: 4px 12px;
+  gap: 14px;
+  padding: 16px 28px;
+  margin: 6px 16px;
   text-decoration: none;
   color: #555;
   border-radius: 8px;
   transition: all 0.2s;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .nav-item:hover {
@@ -164,7 +169,7 @@ function handleLogout() {
 }
 
 .icon {
-  font-size: 18px;
+  font-size: 20px;
 }
 
 .text {
@@ -175,6 +180,8 @@ function handleLogout() {
   flex: 1;
   overflow-y: auto;
   background: #f8f9fa;
+  padding: 0;
+  width: 100%;
 }
 </style>
 
@@ -183,6 +190,12 @@ function handleLogout() {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
 }
 
 body {

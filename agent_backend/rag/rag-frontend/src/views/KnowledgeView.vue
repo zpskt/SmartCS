@@ -638,22 +638,21 @@ const renderMarkdown = (content: string) => {
 
 <style scoped>
 .knowledge-container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 20px;
-  /* 强制白色背景，禁用暗黑模式 */
+  width: 100%;
+  min-height: 100%;
+  padding: 30px 40px;
   background-color: #ffffff !important;
   color: #303133 !important;
 }
 
 .header {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .header-content {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 20px;
 }
 
 .back-btn {
@@ -676,24 +675,25 @@ const renderMarkdown = (content: string) => {
 .header h1 {
   margin: 0;
   color: #333;
-  font-size: 28px;
+  font-size: 32px;
+  font-weight: 600;
 }
 
 /* Tab 样式 */
 .tabs {
   display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
+  gap: 12px;
+  margin-bottom: 24px;
   border-bottom: 2px solid #e0e0e0;
 }
 
 .tab-btn {
-  padding: 12px 24px;
+  padding: 14px 28px;
   background: none;
   border: none;
   border-bottom: 3px solid transparent;
   cursor: pointer;
-  font-size: 15px;
+  font-size: 16px;
   color: #666;
   transition: all 0.3s;
   margin-bottom: -2px;
@@ -711,8 +711,8 @@ const renderMarkdown = (content: string) => {
 
 .tab-content {
   background: white;
-  padding: 24px;
-  border-radius: 8px;
+  padding: 32px;
+  border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 
@@ -762,22 +762,23 @@ const renderMarkdown = (content: string) => {
 .document-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .document-item {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 16px;
+  padding: 20px;
   border: 1px solid #ebeef5;
-  border-radius: 6px;
+  border-radius: 8px;
   transition: all 0.3s;
 }
 
 .document-item:hover {
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   border-color: #409eff;
+  transform: translateY(-2px);
 }
 
 .doc-info {
@@ -785,16 +786,17 @@ const renderMarkdown = (content: string) => {
 }
 
 .doc-info h3 {
-  margin: 0 0 8px 0;
-  font-size: 16px;
+  margin: 0 0 10px 0;
+  font-size: 18px;
   color: #303133;
+  font-weight: 600;
 }
 
 .doc-meta {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .source-tag {

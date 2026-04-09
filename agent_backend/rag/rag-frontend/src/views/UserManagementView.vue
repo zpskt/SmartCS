@@ -300,6 +300,7 @@ function handleLogout() {
 .user-management {
   padding: 30px;
   height: 100%;
+  width: 100%;
 }
 
 .content-header {
