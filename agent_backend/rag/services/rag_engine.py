@@ -14,6 +14,7 @@ from langgraph.prebuilt import create_react_agent
 from langchain_core.tools import tool
 from config.settings import settings
 from stores.vector_store import VectorStoreService
+from tools import create_search_knowledge_base_tool
 import sqlite3
 import os
 
@@ -43,7 +44,7 @@ class RAGEngine:
             )
         
         # 初始化工具列表
-        self.tools = [self._create_retrieval_tool()]
+        self.tools = [create_search_knowledge_base_tool(self.retriever)]
         
         # 定义系统提示词：强调严格基于知识库，禁止捏造
         self.system_prompt = """你是一个企业知识库助手。请严格根据【检索到的参考资料】回答用户的问题。
@@ -61,27 +62,7 @@ class RAGEngine:
         # 创建 Agent
         self.agent = self._create_agent()
     
-    def _create_retrieval_tool(self):
-        """
-        创建检索工具
-            
-        :return: LangChain Tool
-        """
-        @tool
-        def search_knowledge_base(query: str) -> str:
-            """在企业知识库中搜索相关信息。当用户提问时，应该先调用此工具检索相关知识。"""
-            docs = self.retriever.invoke(query)
-            if not docs:
-                return "未找到相关参考资料"
-                
-            formatted = []
-            for i, doc in enumerate(docs, 1):
-                source = doc.metadata.get("title", "未知来源")
-                formatted.append(f"[资料{i}] 来源:{source}\n内容:{doc.page_content}")
-                
-            return "\n\n".join(formatted)
-            
-        return search_knowledge_base
+
         
     def _init_checkpointer(self):
         """
