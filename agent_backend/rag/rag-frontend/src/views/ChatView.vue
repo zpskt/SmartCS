@@ -79,6 +79,11 @@
             <div v-if="message.role === 'user'" class="message-text">{{ message.content }}</div>
             <div v-else class="message-text markdown-body" v-html="renderMarkdown(message.content)"></div>
             
+            <!-- 显示时间 -->
+            <div v-if="message.timestamp" class="message-time">
+              {{ formatTime(message.timestamp) }}
+            </div>
+            
             <!-- 显示参考来源 -->
             <div v-if="message.sources && message.sources.length > 0" class="sources">
               <h4>📚 参考资料:</h4>
@@ -172,7 +177,8 @@ async function loadSessionMessages(sessionId: string) {
       chatStore.addMessage({
         role: msg.role,
         content: msg.content,
-        sources: msg.sources
+        sources: msg.sources,
+        timestamp: msg.timestamp
       })
     })
   } catch (err) {
@@ -339,6 +345,19 @@ function scrollToBottom() {
 function renderMarkdown(content: string) {
   if (!content) return ''
   return marked(content)
+}
+
+// 格式化时间
+function formatTime(timestamp: string) {
+  if (!timestamp) return ''
+  const date = new Date(timestamp)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const seconds = String(date.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
 }
 
 // 发送预设问题
@@ -537,6 +556,13 @@ function sendPresetQuestion(question: string) {
   display: block;
   margin-bottom: 5px;
   color: inherit;
+}
+
+.message-time {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #999;
+  text-align: right;
 }
 
 .message-content p {

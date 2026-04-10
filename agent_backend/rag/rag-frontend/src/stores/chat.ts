@@ -4,6 +4,7 @@ import { ref } from 'vue'
 export interface Message {
   role: 'user' | 'assistant'
   content: string
+  timestamp?: string
   sources?: Array<{
     title: string
     source_type: string
