@@ -14,7 +14,8 @@ from langgraph.prebuilt import create_react_agent
 from langchain_core.tools import tool
 from config.settings import settings
 from stores.vector_store import VectorStoreService
-from tools import create_search_knowledge_base_tool
+from tools.retrieval import create_search_knowledge_base_tool
+from tools.model_adapter import MODEL_ADAPTER_TOOLS
 import sqlite3
 import os
 
@@ -44,7 +45,10 @@ class RAGEngine:
             )
         
         # 初始化工具列表
-        self.tools = [create_search_knowledge_base_tool(self.retriever)]
+        self.tools = [
+            create_search_knowledge_base_tool(self.retriever),
+            *MODEL_ADAPTER_TOOLS
+        ]
         
         # 定义系统提示词：强调严格基于知识库，禁止捏造
         self.system_prompt = """你是一个企业知识库助手。请严格根据【检索到的参考资料】回答用户的问题。
