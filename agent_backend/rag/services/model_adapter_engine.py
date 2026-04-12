@@ -5,6 +5,7 @@
 import logging
 from typing import Dict, Any
 from langchain_core.prompts import ChatPromptTemplate
+from langchain.agents.middleware import wrap_tool_call
 from langchain_community.chat_models import ChatTongyi
 from langchain_ollama import ChatOllama
 from langgraph.checkpoint.sqlite import SqliteSaver
@@ -16,6 +17,28 @@ import os
 
 # 获取日志记录器
 logger = logging.getLogger(__name__)
+
+
+# ==================== Middleware 装饰器 ====================
+
+@wrap_tool_call
+def log_tool_call(request, handler):
+    """工具调用监控中间件"""
+    tool_name = request.tool_call['name']
+    tool_args = request.tool_call['args']
+    
+    logger.info(f"🔧 调用工具: {tool_name}")
+    logger.debug(f"   参数: {tool_args}")
+    
+    # 执行工具
+    result = handler(request)
+    
+    content_preview = str(result)[:200] if len(str(result)) > 200 else str(result)
+    logger.info(f"✅ 工具完成: {tool_name}")
+    logger.debug(f"   返回内容预览: {content_preview}")
+    
+    return result
+
 from langchain.agents import create_agent, AgentState
 
 
@@ -72,7 +95,7 @@ class ModelAdapterEngine:
         # 初始化 Checkpointer (使用 SQLite)
         self.checkpointer = self._init_checkpointer()
         
-        # 创建 Agent
+        # 创建 Agent（传入 middleware）
         self.agent = self._create_agent()
     
     def _init_checkpointer(self):
@@ -94,6 +117,7 @@ class ModelAdapterEngine:
             tools=self.tools,
             system_prompt=self.system_prompt,  # 使用实例变量中定义的提示词
             checkpointer=self.checkpointer,
+            middleware=[log_tool_call],  # 使用装饰器定义的 middleware
         )
         
         return agent

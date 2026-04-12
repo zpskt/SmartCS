@@ -51,7 +51,7 @@ async def log_requests(request: Request, call_next):
     
     # 检测是否为流式请求
     is_streaming_request = False
-    if method == "POST" and "/api/chat" in url:
+    if method == "POST" and ("/api/chat" in url or "/api/model-adapter/chat" in url):
         try:
             body = await request.body()
             if body:

@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.agents import create_agent, AgentState
+from langchain.agents.middleware import wrap_tool_call, before_agent, after_agent
 from langchain_community.chat_models import ChatTongyi
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langgraph.checkpoint.sqlite import SqliteSaver
@@ -16,11 +17,45 @@ from config.settings import settings
 from stores.vector_store import VectorStoreService
 from tools.retrieval import create_search_knowledge_base_tool
 from tools.model_adapter import MODEL_ADAPTER_TOOLS
+from langgraph.runtime import Runtime
+
 import sqlite3
 import os
 
 # 获取日志记录器
 logger = logging.getLogger(__name__)
+
+
+# ==================== Middleware 装饰器 ====================
+
+@wrap_tool_call
+def log_tool_call(request, handler):
+    """工具调用监控中间件"""
+    tool_name = request.tool_call['name']
+    tool_args = request.tool_call['args']
+    
+    logger.info(f"🔧 调用工具: {tool_name}")
+    logger.debug(f"   参数: {tool_args}")
+    
+    # 执行工具
+    result = handler(request)
+    
+    content_preview = str(result)[:200] if len(str(result)) > 200 else str(result)
+    logger.info(f"✅ 工具完成: {tool_name}")
+    logger.debug(f"   返回内容预览: {content_preview}")
+    
+    return result
+
+@before_agent
+def log_before_agent(state: AgentState, runtime: Runtime) -> None:
+    # agent执行前会调用这个函数并传入state和runtime两个对象
+    print(f"[before agent]agent启动，并附带{len(state['messages'])}消息")
+
+
+@after_agent
+def log_after_agent(state: AgentState, runtime: Runtime) -> None:
+    print(f"[after agent]agent结束，并附带{len(state['messages'])}消息")
+
 
 
 class RAGEngine:
@@ -62,15 +97,12 @@ class RAGEngine:
 3. **引用来源**：在回答时，尽量提及信息的来源文档标题。
 4. **诚实原则**：如果问题与知识库内容无关，也请诚实告知用户你目前仅能回答知识库范围内的问题。"""
         
-        self.middleware = []
         # 初始化 Checkpointer (使用 SQLite)
         self.checkpointer = self._init_checkpointer()
         
-        # 创建 Agent
+        # 创建 Agent（传入 middleware）
         self.agent = self._create_agent()
     
-
-        
     def _init_checkpointer(self):
         """
         初始化 SQLite Checkpointer
@@ -98,7 +130,7 @@ class RAGEngine:
             tools=self.tools,
             system_prompt=self.system_prompt, # 使用实例变量中定义的提示词
             checkpointer=self.checkpointer,
-            middleware=self.middleware,
+            middleware=[log_tool_call, log_before_agent, log_after_agent],  # 使用装饰器定义的 middleware
         )
             
         return agent
