@@ -184,6 +184,78 @@ export const chatApi = {
   },
 }
 
+// 型号适配专用 API
+export const modelAdapterApi = {
+  // 普通对话
+  sendMessage(data: ChatMessage): Promise<ChatResponse> {
+    return apiClient.post('/model-adapter/chat', data)
+  },
+  
+  // 流式对话
+  async sendMessageStream(
+    data: ChatMessage,
+    onChunk: (chunk: string) => void,
+    onComplete: () => void
+  ) {
+    const token = localStorage.getItem('token')
+    
+    const response = await fetch('http://localhost:8000/api/model-adapter/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : '',
+        'x-authorization': token ? `Bearer ${token}` : '',
+      },
+      body: JSON.stringify({
+        ...data,
+        stream: true,
+      }),
+    })
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('未授权，请重新登录')
+      }
+      throw new Error(`请求失败: ${response.status}`)
+    }
+
+    const reader = response.body?.getReader()
+    const decoder = new TextDecoder()
+    let fullContent = ''
+
+    while (reader) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const chunk = decoder.decode(value, { stream: true })
+      const lines = chunk.split('\n')
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6)
+          try {
+            const parsed = JSON.parse(data)
+            
+            if (parsed.type === 'chunk' && parsed.content) {
+              fullContent = parsed.content
+              onChunk(fullContent)
+            }
+            
+            if (parsed.type === 'done') {
+              onComplete()
+              return
+            }
+          } catch (e) {
+            console.error('解析错误:', e)
+          }
+        }
+      }
+    }
+    
+    onComplete()
+  },
+}
+
 export const knowledgeApi = {
   // 获取知识库列表
   getKnowledgeList(params?: { page?: number; page_size?: number; source_type?: string }): Promise<{ total: number; items: KnowledgeItem[] }> {

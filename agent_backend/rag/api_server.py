@@ -645,6 +645,35 @@ async def chat(request: ChatRequest, user_id: str = Depends(verify_token)):
         raise HTTPException(status_code=500, detail=f"服务器错误：{str(e)}")
 
 
+@app.post("/api/model-adapter/chat")
+async def model_adapter_chat(request: ChatRequest, user_id: str = Depends(verify_token)):
+    """型号适配专用对话接口"""
+    logger.info(f"🔧 型号适配对话请求 | 用户: {user_id} | 会话: {request.session_id} | 流式: {request.stream}")
+    logger.debug(f"问题: {request.message[:200]}")
+    
+    try:
+        rag_system = get_enterprise_rag_system()
+        
+        # 根据 stream 参数选择响应方式
+        if request.stream:
+            # 流式响应
+            return StreamingResponse(
+                rag_system.model_adapter_chat_stream(request),
+                media_type="text/event-stream"
+            )
+        else:
+            # 一次性响应
+            response = rag_system.model_adapter_chat(request)
+            logger.info(f"✅ 型号适配对话成功 | 响应长度: {len(response.content)} 字符")
+            return response.model_dump()
+    except ValueError as e:
+        logger.warning(f"⚠️ 型号适配对话失败 - 参数错误 | 用户: {user_id} | 错误: {str(e)}")
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"❌ 型号适配对话失败 - 服务器错误 | 用户: {user_id} | 错误: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"服务器错误：{str(e)}")
+
+
 @app.post("/api/memory/add")
 async def add_memory(
     session_id: str,

@@ -9,6 +9,7 @@ from services.knowledge_base import KnowledgeBaseService
 from services.rag_engine import RAGEngine
 from services.session_manager import SessionManager
 from services.memory_store import MemoryStore
+from services.model_adapter_engine import ModelAdapterEngine
 from integrations.feishu import FeishuClient
 from models.schemas import ChatRequest, ChatResponse
 from utils.logger import get_logger
@@ -28,6 +29,7 @@ class EnterpriseRAGSystem:
         self.auth_service = get_auth_service()
         self.knowledge_base = KnowledgeBaseService()
         self.rag_engine = RAGEngine()
+        self.model_adapter_engine = ModelAdapterEngine()
         self.session_manager = SessionManager()
         self.memory_store = MemoryStore()
         self.feishu_client = FeishuClient()
@@ -577,6 +579,104 @@ class EnterpriseRAGSystem:
         :return: 匹配的记忆列表
         """
         return self.memory_store.search_long_term_memory(session_id, query)
+    
+    # ========== 型号适配专用 ==========
+    def model_adapter_chat(self, request: ChatRequest) -> ChatResponse:
+        """
+        型号适配对话
+        
+        :param request: 聊天请求
+        :return: 聊天响应
+        """
+        logger.debug(f"处理型号适配对话请求 | 会话: {request.session_id}")
+        
+        # 验证会话
+        session = self.session_manager.get_session(request.session_id)
+        if not session:
+            logger.error(f"会话不存在: {request.session_id}")
+            raise ValueError(f"会话 {request.session_id} 不存在")
+        
+        # 添加用户消息
+        self.session_manager.add_message_to_session(
+            session_id=request.session_id,
+            role="user",
+            content=request.message
+        )
+        
+        # 执行型号适配查询
+        logger.debug("执行型号适配查询...")
+        adapter_response = self.model_adapter_engine.query(
+            question=request.message,
+            session_id=request.session_id
+        )
+        logger.debug(f"型号适配查询完成")
+        
+        # 添加 AI 响应到会话
+        ai_message = self.session_manager.add_message_to_session(
+            session_id=request.session_id,
+            role="assistant",
+            content=adapter_response["answer"]
+        )
+        
+        # 构建响应
+        response = ChatResponse(
+            session_id=request.session_id,
+            message_id=ai_message.message_id,
+            content=adapter_response["answer"],
+            sources=adapter_response["sources"]
+        )
+        
+        logger.info(f"型号适配对话完成 | 会话: {request.session_id} | 响应长度: {len(response.content)}")
+        return response
+    
+    async def model_adapter_chat_stream(self, request: ChatRequest):
+        """
+        型号适配流式对话生成器（异步）
+        
+        :param request: 聊天请求
+        :yield: SSE 格式的数据片段
+        """
+        import json as json_module
+        
+        logger.debug(f"处理型号适配流式对话请求 | 会话: {request.session_id}")
+        
+        # 验证会话
+        session = self.session_manager.get_session(request.session_id)
+        if not session:
+            logger.error(f"会话不存在: {request.session_id}")
+            raise ValueError(f"会话 {request.session_id} 不存在")
+        
+        # 添加用户消息
+        self.session_manager.add_message_to_session(
+            session_id=request.session_id,
+            role="user",
+            content=request.message
+        )
+        
+        # 流式输出
+        full_answer = ""
+        try:
+            for chunk in self.model_adapter_engine.query_with_stream(
+                question=request.message,
+                session_id=request.session_id
+            ):
+                full_answer += chunk
+                # SSE 格式
+                yield f"data: {json_module.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+            
+            # 完成后保存完整消息
+            ai_message = self.session_manager.add_message_to_session(
+                session_id=request.session_id,
+                role="assistant",
+                content=full_answer
+            )
+            
+            # 发送完成信号
+            yield f"data: {json_module.dumps({'type': 'done', 'message_id': ai_message.message_id, 'session_id': request.session_id})}\n\n"
+            
+        except Exception as e:
+            logger.error(f"型号适配流式对话错误: {e}", exc_info=True)
+            yield f"data: {json_module.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
 
 # 单例模式

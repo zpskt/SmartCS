@@ -19,6 +19,9 @@ from tools.model_adapter import MODEL_ADAPTER_TOOLS
 import sqlite3
 import os
 
+# 获取日志记录器
+logger = logging.getLogger(__name__)
+
 
 class RAGEngine:
     """RAG 对话引擎类"""
@@ -115,18 +118,23 @@ class RAGEngine:
         :return: 包含回答和来源的字典
         """
         try:
+            logger.info(f"🔍 开始 RAG 查询 | 会话: {session_id} | 问题长度: {len(question)}")
+            
             # 配置线程 ID (用于 checkpointer 识别会话)
             config = {"configurable": {"thread_id": session_id}}
                 
             # 调用 Agent
+            logger.debug("⚙️ 调用 Agent...")
             result = self.agent.invoke(
                 {"messages": [{"role": "user", "content": question}]},
                 config=config
             )
+            logger.debug("✅ Agent 调用完成")
                 
             # 提取最后一条消息作为回答
             messages = result.get("messages", [])
             if not messages:
+                logger.warning("⚠️ Agent 未返回任何消息")
                 return {
                     "answer": "抱歉，未收到回复",
                     "sources": []
@@ -134,6 +142,7 @@ class RAGEngine:
                 
             last_message = messages[-1]
             answer = last_message.content if hasattr(last_message, 'content') else str(last_message)
+            logger.info(f"💬 生成回答 | 长度: {len(answer)} 字符")
                 
             response = {
                 "answer": answer,
@@ -142,7 +151,10 @@ class RAGEngine:
                 
             if include_sources:
                 # 获取来源信息 (重新检索以获取元数据)
+                logger.debug(f"📚 检索相关文档...")
                 docs = self.retriever.invoke(question)
+                logger.info(f"📄 检索到 {len(docs)} 个相关文档")
+                
                 response["sources"] = [
                     {
                         "title": doc.metadata.get("title", "未知来源"),
@@ -151,10 +163,13 @@ class RAGEngine:
                     }
                     for doc in docs[:3]  # 只显示前 3 个来源
                 ]
+                logger.debug(f"📋 返回前 {min(3, len(docs))} 个来源")
                 
+            logger.info(f"✅ RAG 查询完成 | 会话: {session_id}")
             return response
                 
         except Exception as e:
+            logger.error(f"❌ RAG 查询失败 | 错误: {str(e)}", exc_info=True)
             return {
                 "answer": f"抱歉，处理时出现错误:{str(e)}",
                 "sources": []

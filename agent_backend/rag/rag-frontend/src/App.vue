@@ -36,6 +36,10 @@ function handleLogout() {
             <span class="icon">💬</span>
             <span class="text">智能问答</span>
           </router-link>
+          <router-link to="/model-adapter" class="nav-item">
+            <span class="icon">🔧</span>
+            <span class="text">型号适配</span>
+          </router-link>
           <router-link to="/knowledge" class="nav-item">
             <span class="icon">📚</span>
             <span class="text">知识库管理</span>

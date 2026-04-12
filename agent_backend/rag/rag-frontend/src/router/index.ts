@@ -3,6 +3,7 @@ import LoginView from '../views/LoginView.vue'
 import ChatView from '../views/ChatView.vue'
 import KnowledgeView from '../views/KnowledgeView.vue'
 import UserManagementView from '../views/UserManagementView.vue'
+import ModelAdapterView from '../views/ModelAdapterView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -33,6 +34,12 @@ const router = createRouter({
       name: 'users',
       component: UserManagementView,
       meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
+      path: '/model-adapter',
+      name: 'model-adapter',
+      component: ModelAdapterView,
+      meta: { requiresAuth: true },
     },
   ],
 })

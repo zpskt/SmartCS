@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-container">
+  <div class="model-adapter-container">
     <!-- 会话选择栏 -->
     <div class="session-bar">
       <div class="session-selector">
@@ -52,9 +52,9 @@
     <main class="chat-main">
       <!-- 消息列表 -->
       <div class="messages-container" ref="messagesContainer">
-        <div v-if="chatStore.messages.length === 0" class="welcome-message">
-          <h3>{{ WELCOME_MESSAGES.CHAT_TITLE }}</h3>
-          <p>{{ WELCOME_MESSAGES.CHAT_SUBTITLE }}</p>
+        <div v-if="messages.length === 0" class="welcome-message">
+          <h3>🔧 型号适配助手</h3>
+          <p>专业的产品型号查询和管理工具</p>
           
           <!-- 预设问题 -->
           <div class="preset-questions">
@@ -70,12 +70,12 @@
         </div>
         
         <div
-          v-for="(message, index) in chatStore.messages"
+          v-for="(message, index) in messages"
           :key="index"
           :class="['message', message.role]"
         >
           <div class="message-content">
-            <strong>{{ message.role === 'user' ? '您' : 'AI 助手' }}:</strong>
+            <strong>{{ message.role === 'user' ? '您' : '型号助手' }}:</strong>
             <div v-if="message.role === 'user'" class="message-text">{{ message.content }}</div>
             <div v-else class="message-text markdown-body" v-html="renderMarkdown(message.content)"></div>
             
@@ -83,24 +83,11 @@
             <div v-if="message.timestamp" class="message-time">
               {{ formatTime(message.timestamp) }}
             </div>
-            
-            <!-- 显示参考来源 -->
-            <div v-if="message.sources && message.sources.length > 0" class="sources">
-              <h4>📚 参考资料:</h4>
-              <div
-                v-for="(source, idx) in message.sources"
-                :key="idx"
-                class="source-item"
-              >
-                <strong>{{ source.title }}</strong>
-                <p>{{ source.snippet }}</p>
-              </div>
-            </div>
           </div>
         </div>
         
-        <div v-if="chatStore.isLoading" class="loading-message">
-          AI 正在思考中...
+        <div v-if="isLoading" class="loading-message">
+          正在查询型号信息...
         </div>
       </div>
 
@@ -108,14 +95,14 @@
       <div class="input-container">
         <textarea
           v-model="inputMessage"
-          @keydown.enter.exact.prevent="handleEnterKey"
-          placeholder="输入您的问题... (按 Ctrl+Enter 发送)"
-          :disabled="chatStore.isLoading"
+          @keydown.enter.prevent="sendMessage"
+          placeholder="询问型号相关问题... (按 Enter 发送)"
+          :disabled="isLoading"
           rows="3"
         ></textarea>
         <button
           @click="sendMessage"
-          :disabled="!inputMessage.trim() || chatStore.isLoading"
+          :disabled="!inputMessage.trim() || isLoading"
           class="send-btn"
         >
           发送
@@ -126,30 +113,39 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch } from 'vue'
-import { useChatStore } from '@/stores/chat'
-import { chatApi, sessionApi } from '@/api'
+import { ref, onMounted, nextTick } from 'vue'
+import { modelAdapterApi, sessionApi } from '@/api'
 import { marked } from 'marked'
-import { WELCOME_MESSAGES, PRESET_QUESTIONS } from '@/config'
 
-const chatStore = useChatStore()
+interface Message {
+  role: 'user' | 'assistant'
+  content: string
+  timestamp?: string
+}
 
 const inputMessage = ref('')
+const messages = ref<Message[]>([])
 const messagesContainer = ref<HTMLElement | null>(null)
 const sessions = ref<any[]>([])
 const currentSessionId = ref('')
 const showEditSessionModal = ref(false)
 const editSessionTitle = ref('')
+const isLoading = ref(false)
+
+// 预设问题
+const PRESET_QUESTIONS = [
+  '有哪些可用的型号？',
+  'M001型号适配了哪些功能？',
+  '查询M002的详细信息',
+  '搜索包含"智能"的型号'
+]
 
 onMounted(async () => {
   await loadSessions()
-  // 如果没有会话，创建一个新会话
   if (sessions.value.length === 0) {
     await createNewSession()
   } else {
     currentSessionId.value = sessions.value[0].session_id
-    chatStore.setSessionId(currentSessionId.value)
-    // 加载第一个会话的消息
     await loadSessionMessages(currentSessionId.value)
   }
 })
@@ -167,20 +163,13 @@ async function loadSessions() {
 async function loadSessionMessages(sessionId: string) {
   try {
     const response = await sessionApi.getSessionMessages(sessionId)
-    const messages = response.messages || []
+    const msgs = response.messages || []
     
-    // 清空当前消息
-    chatStore.clearMessages()
-    
-    // 添加历史消息
-    messages.forEach((msg: any) => {
-      chatStore.addMessage({
-        role: msg.role,
-        content: msg.content,
-        sources: msg.sources,
-        timestamp: msg.timestamp
-      })
-    })
+    messages.value = msgs.map((msg: any) => ({
+      role: msg.role,
+      content: msg.content,
+      timestamp: msg.timestamp
+    }))
   } catch (err) {
     console.error('加载消息失败:', err)
   }
@@ -189,10 +178,9 @@ async function loadSessionMessages(sessionId: string) {
 async function createNewSession() {
   try {
     const userId = localStorage.getItem('userId') || ''
-    const response = await sessionApi.createSession(userId)
+    const response = await sessionApi.createSession(userId, '型号适配会话')
     if (response.success) {
-      chatStore.setSessionId(response.session_id)
-      chatStore.clearMessages()
+      messages.value = []
       await loadSessions()
       currentSessionId.value = response.session_id
     }
@@ -203,9 +191,7 @@ async function createNewSession() {
 
 async function switchSession() {
   if (!currentSessionId.value) return
-  chatStore.setSessionId(currentSessionId.value)
-  chatStore.clearMessages()
-  // 加载选中会话的历史消息
+  messages.value = []
   await loadSessionMessages(currentSessionId.value)
 }
 
@@ -221,27 +207,15 @@ async function deleteCurrentSession() {
   
   try {
     await sessionApi.clearSession(currentSessionId.value)
-    
-    // 重新加载会话列表
     await loadSessions()
     
-    // 切换到第一个会话
     if (sessions.value.length > 0) {
       currentSessionId.value = sessions.value[0].session_id
-      chatStore.setSessionId(currentSessionId.value)
       await loadSessionMessages(currentSessionId.value)
     }
   } catch (err) {
     console.error('删除会话失败:', err)
     alert('删除会话失败')
-  }
-}
-
-function showEditSessionDialog() {
-  const currentSession = sessions.value.find(s => s.session_id === currentSessionId.value)
-  if (currentSession) {
-    editSessionTitle.value = currentSession.title
-    showEditSessionModal.value = true
   }
 }
 
@@ -264,70 +238,62 @@ function closeEditSessionModal() {
 }
 
 async function sendMessage() {
-  if (!inputMessage.value.trim() || chatStore.isLoading) return
+  if (!inputMessage.value.trim() || isLoading.value) return
 
   const message = inputMessage.value.trim()
   inputMessage.value = ''
 
   // 添加用户消息
-  chatStore.addMessage({
+  messages.value.push({
     role: 'user',
     content: message,
+    timestamp: new Date().toISOString()
   })
 
-  // 添加空的 AI 消息用于流式更新
-  chatStore.addMessage({
+  // 添加空的 AI 消息
+  messages.value.push({
     role: 'assistant',
     content: '',
+    timestamp: new Date().toISOString()
   })
 
-  chatStore.setLoading(true)
+  isLoading.value = true
 
   try {
     let lastContent = ''
-    await chatApi.sendMessageStream(
+    await modelAdapterApi.sendMessageStream(
       {
-        session_id: chatStore.sessionId,
+        session_id: currentSessionId.value,
         message: message,
       },
-      // 流式内容回调 - 实现打字机效果
+      // 流式内容回调
       (fullText) => {
-        // 计算需要追加的新文本
         const newText = fullText.slice(lastContent.length)
         lastContent = fullText
-        
-        // 逐字显示新文本
         typeWriterEffect(newText)
       },
       // 完成回调
-      (sources) => {
-        if (sources && sources.length > 0) {
-          chatStore.updateLastMessage(chatStore.messages[chatStore.messages.length - 1].content, sources)
-        }
-        chatStore.setLoading(false)
+      () => {
+        isLoading.value = false
       }
     )
   } catch (err: any) {
     console.error('发送消息失败:', err)
     const errorMsg = err.message || '抱歉，发送消息失败，请稍后重试。'
-    chatStore.updateLastMessage(errorMsg)
-    chatStore.setLoading(false)
+    messages.value[messages.value.length - 1].content = errorMsg
+    isLoading.value = false
   }
 }
 
-// 打字机效果
 function typeWriterEffect(text: string) {
-  const currentIndex = chatStore.messages.length - 1
+  const currentIndex = messages.value.length - 1
   let charIndex = 0
   
   function typeChar() {
     if (charIndex < text.length) {
-      const currentContent = chatStore.messages[currentIndex].content
-      chatStore.messages[currentIndex].content = currentContent + text[charIndex]
+      messages.value[currentIndex].content += text[charIndex]
       charIndex++
       nextTick(() => scrollToBottom())
-      
-      // 每个字符延迟 30ms，模拟打字效果
       setTimeout(typeChar, 30)
     }
   }
@@ -341,22 +307,11 @@ function scrollToBottom() {
   }
 }
 
-// 渲染 Markdown
 function renderMarkdown(content: string) {
   if (!content) return ''
   return marked(content)
 }
 
-// 处理回车键
-function handleEnterKey(event: KeyboardEvent) {
-  // Ctrl+Enter 或 Cmd+Enter 发送
-  if (event.ctrlKey || event.metaKey) {
-    sendMessage()
-  }
-  // 单独 Enter 键换行（默认行为）
-}
-
-// 格式化时间
 function formatTime(timestamp: string) {
   if (!timestamp) return ''
   const date = new Date(timestamp)
@@ -369,7 +324,6 @@ function formatTime(timestamp: string) {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
 }
 
-// 发送预设问题
 function sendPresetQuestion(question: string) {
   inputMessage.value = question
   sendMessage()
@@ -377,12 +331,11 @@ function sendPresetQuestion(question: string) {
 </script>
 
 <style scoped>
-.chat-container {
+.model-adapter-container {
   height: 100%;
   display: flex;
   flex-direction: column;
   width: 100%;
-  min-width: 100%;
 }
 
 .session-bar {
@@ -413,14 +366,9 @@ function sendPresetQuestion(question: string) {
   cursor: pointer;
 }
 
-.session-select:focus {
-  outline: none;
-  border-color: #667eea;
-}
-
 .new-session-btn {
   padding: 8px 16px;
-  background: #667eea;
+  background: #ff6b6b;
   color: white;
   border: none;
   border-radius: 6px;
@@ -431,7 +379,7 @@ function sendPresetQuestion(question: string) {
 }
 
 .new-session-btn:hover {
-  background: #5568d3;
+  background: #ee5a52;
   transform: translateY(-1px);
 }
 
@@ -446,11 +394,6 @@ function sendPresetQuestion(question: string) {
   transition: all 0.2s;
 }
 
-.edit-session-btn:hover {
-  background: #45a049;
-  transform: translateY(-1px);
-}
-
 .delete-session-btn {
   padding: 8px 12px;
   background: #f44336;
@@ -460,11 +403,6 @@ function sendPresetQuestion(question: string) {
   cursor: pointer;
   font-size: 16px;
   transition: all 0.2s;
-}
-
-.delete-session-btn:hover:not(:disabled) {
-  background: #d32f2f;
-  transform: translateY(-1px);
 }
 
 .delete-session-btn:disabled {
@@ -482,7 +420,6 @@ function sendPresetQuestion(question: string) {
   flex: 1;
   overflow-y: auto;
   padding: 30px;
-  width: 100%;
 }
 
 .welcome-message {
@@ -493,13 +430,8 @@ function sendPresetQuestion(question: string) {
 
 .welcome-message h3 {
   margin-bottom: 15px;
-  font-size: 24px;
-  color: #333;
-}
-
-.welcome-message p {
-  font-size: 16px;
-  color: #888;
+  font-size: 28px;
+  color: #ff6b6b;
 }
 
 .preset-questions {
@@ -513,8 +445,8 @@ function sendPresetQuestion(question: string) {
 .preset-question-btn {
   padding: 10px 20px;
   background: white;
-  border: 1px solid #667eea;
-  color: #667eea;
+  border: 1px solid #ff6b6b;
+  color: #ff6b6b;
   border-radius: 20px;
   cursor: pointer;
   font-size: 14px;
@@ -522,10 +454,10 @@ function sendPresetQuestion(question: string) {
 }
 
 .preset-question-btn:hover {
-  background: #667eea;
+  background: #ff6b6b;
   color: white;
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 8px rgba(255, 107, 107, 0.3);
 }
 
 .message {
@@ -552,19 +484,8 @@ function sendPresetQuestion(question: string) {
 }
 
 .message.user .message-content {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
   color: white;
-}
-
-.message.assistant .message-content {
-  background: white;
-  color: #333;
-}
-
-.message-content strong {
-  display: block;
-  margin-bottom: 5px;
-  color: inherit;
 }
 
 .message-time {
@@ -574,42 +495,17 @@ function sendPresetQuestion(question: string) {
   text-align: right;
 }
 
-.message-content p {
-  margin: 0;
-  line-height: 1.6;
-  color: inherit;
-}
-
-.message-text {
-  line-height: 1.6;
-}
-
 .markdown-body :deep(h1),
 .markdown-body :deep(h2),
-.markdown-body :deep(h3),
-.markdown-body :deep(h4),
-.markdown-body :deep(h5),
-.markdown-body :deep(h6) {
+.markdown-body :deep(h3) {
   margin: 12px 0 8px 0;
   font-weight: 600;
-  line-height: 1.4;
-}
-
-.markdown-body :deep(h1) { font-size: 20px; }
-.markdown-body :deep(h2) { font-size: 18px; }
-.markdown-body :deep(h3) { font-size: 16px; }
-.markdown-body :deep(h4) { font-size: 15px; }
-
-.markdown-body :deep(p) {
-  margin: 8px 0;
 }
 
 .markdown-body :deep(code) {
   padding: 2px 6px;
   background: rgba(0, 0, 0, 0.06);
   border-radius: 3px;
-  font-family: 'Courier New', monospace;
-  font-size: 13px;
 }
 
 .markdown-body :deep(pre) {
@@ -617,95 +513,6 @@ function sendPresetQuestion(question: string) {
   background: #282c34;
   border-radius: 6px;
   overflow-x: auto;
-  margin: 10px 0;
-}
-
-.markdown-body :deep(pre code) {
-  background: none;
-  padding: 0;
-  color: #abb2bf;
-  font-size: 13px;
-}
-
-.markdown-body :deep(ul),
-.markdown-body :deep(ol) {
-  margin: 8px 0;
-  padding-left: 24px;
-}
-
-.markdown-body :deep(li) {
-  margin: 4px 0;
-}
-
-.markdown-body :deep(blockquote) {
-  margin: 10px 0;
-  padding: 10px 15px;
-  border-left: 4px solid #667eea;
-  background: rgba(102, 126, 234, 0.1);
-  border-radius: 4px;
-}
-
-.markdown-body :deep(a) {
-  color: #667eea;
-  text-decoration: none;
-}
-
-.markdown-body :deep(a:hover) {
-  text-decoration: underline;
-}
-
-.markdown-body :deep(table) {
-  border-collapse: collapse;
-  width: 100%;
-  margin: 10px 0;
-}
-
-.markdown-body :deep(th),
-.markdown-body :deep(td) {
-  border: 1px solid #ddd;
-  padding: 8px 12px;
-  text-align: left;
-}
-
-.markdown-body :deep(th) {
-  background: #f5f5f5;
-  font-weight: 600;
-}
-
-.markdown-body :deep(img) {
-  max-width: 100%;
-  height: auto;
-  border-radius: 4px;
-}
-
-.sources {
-  margin-top: 15px;
-  padding-top: 15px;
-  border-top: 1px solid #e0e0e0;
-}
-
-.sources h4 {
-  margin: 0 0 10px 0;
-  font-size: 14px;
-  color: #666;
-}
-
-.source-item {
-  margin-bottom: 10px;
-  padding: 10px;
-  background: #f9f9f9;
-  border-radius: 5px;
-}
-
-.source-item strong {
-  color: #667eea;
-  font-size: 13px;
-}
-
-.source-item p {
-  margin: 5px 0 0 0;
-  font-size: 12px;
-  color: #666;
 }
 
 .loading-message {
@@ -720,7 +527,6 @@ function sendPresetQuestion(question: string) {
   border-top: 1px solid #e0e0e0;
   display: flex;
   gap: 15px;
-  width: 100%;
 }
 
 .input-container textarea {
@@ -731,18 +537,11 @@ function sendPresetQuestion(question: string) {
   resize: none;
   font-family: inherit;
   font-size: 15px;
-  line-height: 1.5;
-}
-
-.input-container textarea:focus {
-  outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .send-btn {
   padding: 14px 36px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -755,7 +554,7 @@ function sendPresetQuestion(question: string) {
 
 .send-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
 }
 
 .send-btn:disabled {
@@ -793,25 +592,6 @@ function sendPresetQuestion(question: string) {
   border-bottom: 1px solid #e0e0e0;
 }
 
-.modal-header h3 {
-  margin: 0;
-  font-size: 18px;
-  color: #333;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 28px;
-  color: #999;
-  cursor: pointer;
-  line-height: 1;
-}
-
-.close-btn:hover {
-  color: #333;
-}
-
 .modal-body {
   padding: 20px;
 }
@@ -824,7 +604,6 @@ function sendPresetQuestion(question: string) {
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
-  color: #333;
 }
 
 .form-group input {
@@ -836,11 +615,6 @@ function sendPresetQuestion(question: string) {
   box-sizing: border-box;
 }
 
-.form-group input:focus {
-  outline: none;
-  border-color: #667eea;
-}
-
 .modal-footer {
   display: flex;
   justify-content: flex-end;
@@ -849,32 +623,22 @@ function sendPresetQuestion(question: string) {
   border-top: 1px solid #e0e0e0;
 }
 
-.cancel-btn {
+.cancel-btn, .submit-btn {
   padding: 10px 20px;
-  background: #f5f5f5;
-  color: #333;
   border: none;
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
 }
 
-.cancel-btn:hover {
-  background: #e0e0e0;
+.cancel-btn {
+  background: #f5f5f5;
+  color: #333;
 }
 
 .submit-btn {
-  padding: 10px 20px;
-  background: #667eea;
+  background: #ff6b6b;
   color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.submit-btn:hover:not(:disabled) {
-  background: #5568d3;
 }
 
 .submit-btn:disabled {
