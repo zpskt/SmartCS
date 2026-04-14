@@ -183,6 +183,75 @@ class AuthService:
         permissions = self.get_user_permissions(user_id)
         return permission in permissions
     
+    def has_any_permission(self, user_id: str, permissions: List[str]) -> bool:
+        """
+        检查用户是否拥有任意一个指定权限
+        
+        :param user_id: 用户 ID
+        :param permissions: 权限列表
+        :return: 是否拥有任意权限
+        """
+        user_permissions = self.get_user_permissions(user_id)
+        return any(p in user_permissions for p in permissions)
+    
+    def has_all_permissions(self, user_id: str, permissions: List[str]) -> bool:
+        """
+        检查用户是否拥有所有指定权限
+        
+        :param user_id: 用户 ID
+        :param permissions: 权限列表
+        :return: 是否拥有所有权限
+        """
+        user_permissions = self.get_user_permissions(user_id)
+        return all(p in user_permissions for p in permissions)
+    
+    def get_user_role(self, user_id: str) -> Optional[str]:
+        """
+        获取用户角色
+        
+        :param user_id: 用户 ID
+        :return: 角色名称
+        """
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute('SELECT role FROM users WHERE user_id = ?', (user_id,))
+            user = cursor.fetchone()
+            return user['role'] if user else None
+        finally:
+            conn.close()
+    
+    def check_role_and_permission(
+        self,
+        user_id: str,
+        required_roles: Optional[List[str]] = None,
+        required_permissions: Optional[List[str]] = None,
+        require_all_permissions: bool = False
+    ) -> bool:
+        """
+        综合检查用户角色和权限
+        
+        :param user_id: 用户 ID
+        :param required_roles: 需要的角色列表（满足任一即可）
+        :param required_permissions: 需要的权限列表
+        :param require_all_permissions: 是否需要所有权限（True=全部，False=任一）
+        :return: 是否通过检查
+        """
+        # 检查角色
+        if required_roles:
+            user_role = self.get_user_role(user_id)
+            if not user_role or user_role not in required_roles:
+                return False
+        
+        # 检查权限
+        if required_permissions:
+            if require_all_permissions:
+                return self.has_all_permissions(user_id, required_permissions)
+            else:
+                return self.has_any_permission(user_id, required_permissions)
+        
+        return True
+    
     def add_user(self, user_id: str, username: str, password: str, role: str = "user"):
         """
         添加新用户

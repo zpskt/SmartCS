@@ -16,6 +16,17 @@ import logging
 from app import get_enterprise_rag_system
 from models.schemas import ChatRequest, ChatResponse
 from utils.logger import get_logger
+from utils.permissions import (
+    require_roles,
+    require_permissions,
+    require_role_and_permissions,
+    require_admin,
+    require_read_permission,
+    require_write_permission,
+    require_delete_permission,
+    require_manage_users_permission,
+    require_knowledge_management
+)
 
 # 获取 API 专用日志记录器
 logger = get_logger("api_server")
@@ -195,9 +206,9 @@ async def login(request: LoginRequest):
 @app.post("/api/knowledge/add")
 async def add_knowledge(
     request: KnowledgeAddRequest,
-    user_id: str = Depends(verify_token)
+    user_id: str = Depends(require_write_permission())
 ):
-    """添加知识到知识库"""
+    """添加知识到知识库（需要写入权限）"""
     logger.info(f"📝 添加知识 | 用户: {user_id} | 标题: {request.title} | 类型: {request.source_type}")
     rag_system = get_enterprise_rag_system()
     result = rag_system.add_knowledge(
@@ -228,9 +239,9 @@ async def search_knowledge(query: str, limit: int = 5):
 @app.post("/api/knowledge/delete")
 async def delete_knowledge(
     request: KnowledgeDeleteRequest,
-    user_id: str = Depends(verify_token)
+    user_id: str = Depends(require_delete_permission())
 ):
-    """删除知识库文档"""
+    """删除知识库文档（需要删除权限）"""
     logger.info(f"🗑️ 删除知识库文档 | 用户: {user_id} | 文档ID: {request.doc_id}")
     rag_system = get_enterprise_rag_system()
     
@@ -248,9 +259,9 @@ async def delete_knowledge(
 async def update_knowledge(
     doc_id: str,
     request: KnowledgeUpdateRequest,
-    user_id: str = Depends(verify_token)
+    user_id: str = Depends(require_write_permission())
 ):
-    """更新知识库文档"""
+    """更新知识库文档（需要写入权限）"""
     logger.info(f"✏️ 更新知识库文档 | 用户: {user_id} | 文档ID: {doc_id}")
     rag_system = get_enterprise_rag_system()
     
@@ -307,9 +318,9 @@ async def list_knowledge(
     page: int = 1,
     page_size: int = 10,
     source_type: Optional[str] = None,
-    user_id: str = Depends(verify_token)
+    user_id: str = Depends(require_read_permission())
 ):
-    """获取知识库文档列表（分页）
+    """获取知识库文档列表（分页，需要读取权限）
     
     Args:
         page: 页码
@@ -351,9 +362,9 @@ async def list_knowledge(
 @app.get("/api/knowledge/{doc_id}")
 async def get_knowledge_detail(
     doc_id: str,
-    user_id: str = Depends(verify_token)
+    user_id: str = Depends(require_read_permission())
 ):
-    """获取单个文档详情"""
+    """获取单个文档详情（需要读取权限）"""
     logger.info(f"📄 获取文档详情 | 用户: {user_id} | 文档ID: {doc_id}")
     rag_system = get_enterprise_rag_system()
     
@@ -370,9 +381,9 @@ async def get_knowledge_detail(
 async def upload_knowledge_file(
     file: UploadFile = File(...),
     metadata: Optional[str] = None,
-    user_id: str = Depends(verify_token)
+    user_id: str = Depends(require_write_permission())
 ):
-    """上传文件到知识库（支持 CSV、Excel、TXT、MD 等）"""
+    """上传文件到知识库（支持 CSV、Excel、TXT、MD 等，需要写入权限）"""
     logger.info(f"📤 上传文件 | 用户: {user_id} | 文件名: {file.filename}")
     
     try:
@@ -413,9 +424,12 @@ async def upload_knowledge_file(
 @app.post("/api/knowledge/sync-feishu")
 async def sync_feishu(
     request: FeishuSyncRequest,
-    user_id: str = Depends(verify_token)
+    user_id: str = Depends(require_role_and_permissions(
+        required_roles=["admin"],
+        required_permissions=["write", "manage_knowledge"]
+    ))
 ):
-    """同步飞书文档"""
+    """同步飞书文档（需要管理员角色或知识库管理权限）"""
     rag_system = get_enterprise_rag_system()
     result = rag_system.sync_feishu_documents(
         folder_token=request.folder_token,
@@ -431,9 +445,9 @@ async def sync_feishu(
 @app.post("/api/session/create")
 async def create_session(
     request: SessionCreateRequest,
-    user_id: str = Depends(verify_token)
+    user_id: str = Depends(require_write_permission())
 ):
-    """创建会话"""
+    """创建会话（需要写入权限）"""
     logger.info(f"🆕 创建会话 | 用户: {user_id} | 标题: {request.title}")
     rag_system = get_enterprise_rag_system()
     result = rag_system.create_session(
@@ -450,8 +464,8 @@ async def create_session(
 
 
 @app.get("/api/session/list")
-async def list_sessions(user_id: str = Depends(verify_token)):
-    """获取会话列表"""
+async def list_sessions(user_id: str = Depends(require_read_permission())):
+    """获取会话列表（需要读取权限）"""
     logger.info(f"📋 获取会话列表 | 用户: {user_id}")
     rag_system = get_enterprise_rag_system()
     sessions = rag_system.get_session_list(user_id)
@@ -462,9 +476,9 @@ async def list_sessions(user_id: str = Depends(verify_token)):
 @app.get("/api/session/{session_id}/messages")
 async def get_session_messages(
     session_id: str,
-    user_id: str = Depends(verify_token)
+    user_id: str = Depends(require_read_permission())
 ):
-    """获取会话的聊天记录"""
+    """获取会话的聊天记录（需要读取权限）"""
     logger.info(f"💬 获取会话消息 | 用户: {user_id} | 会话ID: {session_id}")
     
     rag_system = get_enterprise_rag_system()
@@ -496,9 +510,9 @@ async def get_session_messages(
 @app.delete("/api/session/{session_id}")
 async def delete_session(
     session_id: str,
-    user_id: str = Depends(verify_token)
+    user_id: str = Depends(require_delete_permission())
 ):
-    """删除会话（软删除）"""
+    """删除会话（软删除，需要删除权限）"""
     logger.info(f"🗑️ 删除会话 | 用户: {user_id} | 会话ID: {session_id}")
     rag_system = get_enterprise_rag_system()
     result = rag_system.delete_session(session_id)
@@ -514,9 +528,9 @@ async def delete_session(
 @app.post("/api/session/{session_id}/clear")
 async def clear_session_messages(
     session_id: str,
-    user_id: str = Depends(verify_token)
+    user_id: str = Depends(require_delete_permission())
 ):
-    """删除会话（逻辑删除）"""
+    """删除会话（逻辑删除，需要删除权限）"""
     logger.info(f"🗑️ 删除会话 | 用户: {user_id} | 会话ID: {session_id}")
     
     rag_system = get_enterprise_rag_system()
@@ -556,9 +570,9 @@ async def clear_session_messages(
 async def update_session(
     session_id: str,
     request: SessionUpdateRequest,
-    user_id: str = Depends(verify_token)
+    user_id: str = Depends(require_write_permission())
 ):
-    """修改会话名称"""
+    """修改会话名称（需要写入权限）"""
     logger.info(f"✏️ 修改会话名称 | 用户: {user_id} | 会话ID: {session_id} | 新名称: {request.title}")
     
     rag_system = get_enterprise_rag_system()
@@ -604,9 +618,9 @@ async def update_session(
 async def export_session(
     session_id: str,
     format: str = "json",
-    user_id: str = Depends(verify_token)
+    user_id: str = Depends(require_read_permission())
 ):
-    """导出会话"""
+    """导出会话（需要读取权限）"""
     rag_system = get_enterprise_rag_system()
     result = rag_system.export_session(session_id, format)
     
@@ -617,8 +631,8 @@ async def export_session(
 
 
 @app.post("/api/chat")
-async def chat(request: ChatRequest, user_id: str = Depends(verify_token)):
-    """对话接口"""
+async def chat(request: ChatRequest, user_id: str = Depends(require_write_permission())):
+    """对话接口（需要写入权限）"""
     logger.info(f"💬 对话请求 | 用户: {user_id} | 会话: {request.session_id} | 流式: {request.stream}")
     logger.debug(f"问题: {request.message[:200]}")
     
@@ -646,8 +660,8 @@ async def chat(request: ChatRequest, user_id: str = Depends(verify_token)):
 
 
 @app.post("/api/model-adapter/chat")
-async def model_adapter_chat(request: ChatRequest, user_id: str = Depends(verify_token)):
-    """型号适配专用对话接口"""
+async def model_adapter_chat(request: ChatRequest, user_id: str = Depends(require_write_permission())):
+    """型号适配专用对话接口（需要写入权限）"""
     logger.info(f"🔧 型号适配对话请求 | 用户: {user_id} | 会话: {request.session_id} | 流式: {request.stream}")
     logger.debug(f"问题: {request.message[:200]}")
     
@@ -680,9 +694,9 @@ async def add_memory(
     content: str,
     category: str = "general",
     importance: float = 0.5,
-    user_id: str = Depends(verify_token)
+    user_id: str = Depends(require_write_permission())
 ):
-    """添加长期记忆"""
+    """添加长期记忆（需要写入权限）"""
     rag_system = get_enterprise_rag_system()
     result = rag_system.add_long_term_memory(
         session_id=session_id,
@@ -697,9 +711,9 @@ async def add_memory(
 async def search_memories(
     session_id: str,
     query: str,
-    user_id: str = Depends(verify_token)
+    user_id: str = Depends(require_read_permission())
 ):
-    """搜索记忆"""
+    """搜索记忆（需要读取权限）"""
     rag_system = get_enterprise_rag_system()
     memories = rag_system.search_memories(session_id, query)
     return {"memories": memories}
@@ -719,9 +733,9 @@ async def health_check():
 @app.post("/api/users/create")
 async def create_user(
     request: UserCreateRequest,
-    current_user_id: str = Depends(verify_token)
+    current_user_id: str = Depends(require_manage_users_permission())
 ):
-    """创建新用户（需要管理员权限）"""
+    """创建新用户（需要用户管理权限）"""
     logger.info(f"👤 创建用户 | 操作者: {current_user_id} | 新用户ID: {request.user_id}")
     
     rag_system = get_enterprise_rag_system()
@@ -754,8 +768,8 @@ async def create_user(
 
 
 @app.get("/api/users/list")
-async def list_users(current_user_id: str = Depends(verify_token)):
-    """获取所有用户列表（需要管理员权限）"""
+async def list_users(current_user_id: str = Depends(require_manage_users_permission())):
+    """获取所有用户列表（需要用户管理权限）"""
     logger.info(f"📋 获取用户列表 | 操作者: {current_user_id}")
     
     rag_system = get_enterprise_rag_system()
@@ -805,9 +819,9 @@ async def get_user_detail(
 async def update_user(
     user_id: str,
     request: UserUpdateRequest,
-    current_user_id: str = Depends(verify_token)
+    current_user_id: str = Depends(require_manage_users_permission())
 ):
-    """更新用户信息（需要管理员权限）"""
+    """更新用户信息（需要用户管理权限）"""
     logger.info(f"✏️ 更新用户 | 操作者: {current_user_id} | 目标用户: {user_id}")
     
     rag_system = get_enterprise_rag_system()
@@ -847,9 +861,9 @@ async def update_user(
 @app.post("/api/users/delete")
 async def delete_user(
     request: UserDeleteRequest,
-    current_user_id: str = Depends(verify_token)
+    current_user_id: str = Depends(require_manage_users_permission())
 ):
-    """删除用户（需要管理员权限）"""
+    """删除用户（需要用户管理权限）"""
     logger.info(f"🗑️ 删除用户 | 操作者: {current_user_id} | 目标用户: {request.user_id}")
     
     rag_system = get_enterprise_rag_system()
