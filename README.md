@@ -24,7 +24,7 @@ conda activate smart-cs
 pip install -r requirements.txt
 ```
 ```shell
-pip install langchain_ollama python-jose django django-cors-headers==4.3.1 langchain langgraph-checkpoint-postgres postgres langgraph python-multipart fastapi docx pdfplumber langchain_chroma langchain_community langchain_core langchain_text_splitters dashscope streamlit -i https://mirrors.aliyun.com/pypi/simple/
+pip install pymysql langchain_ollama python-jose django django-cors-headers==4.3.1 langchain langgraph-checkpoint-postgres postgres langgraph python-multipart fastapi docx pdfplumber langchain_chroma langchain_community langchain_core langchain_text_splitters dashscope streamlit -i https://mirrors.aliyun.com/pypi/simple/
 
 ```
 

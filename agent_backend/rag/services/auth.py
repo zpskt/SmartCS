@@ -3,10 +3,12 @@
 实现用户认证、授权和访问控制
 """
 import secrets
-import sqlite3
+import json
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List
 from jose import jwt, JWTError
+import pymysql
+from pymysql.cursors import DictCursor
 from config.settings import settings
 
 
@@ -19,8 +21,17 @@ class AuthService:
         self.algorithm = settings.JWT_ALGORITHM
         self.access_token_expire_minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
         
-        # 数据库路径
-        self.db_path = "./data/users.db"
+        # MySQL 数据库配置
+        self.db_config = {
+            'host': settings.MYSQL_HOST,
+            'port': settings.MYSQL_PORT,
+            'user': settings.MYSQL_USER,
+            'password': settings.MYSQL_PASSWORD,
+            'database': settings.MYSQL_DATABASE,
+            'charset': 'utf8mb4',
+            'cursorclass': DictCursor,
+            'autocommit': True
+        }
         
         # 初始化数据库
         self._init_database()
@@ -28,45 +39,44 @@ class AuthService:
         # Token 黑名单
         self.token_blacklist: set = set()
     
-    def _get_connection(self) -> sqlite3.Connection:
+    def _get_connection(self) -> pymysql.Connection:
         """获取数据库连接"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
+        return pymysql.connect(**self.db_config)
     
     def _init_database(self):
         """初始化数据库表结构"""
         conn = self._get_connection()
         try:
-            cursor = conn.cursor()
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS users (
-                    user_id TEXT PRIMARY KEY,
-                    username TEXT UNIQUE NOT NULL,
-                    password TEXT NOT NULL,
-                    role TEXT DEFAULT 'user',
-                    permissions TEXT DEFAULT '["read"]',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            conn.commit()
-            
-            # 检查是否存在默认用户，不存在则创建
-            cursor.execute('SELECT COUNT(*) FROM users')
-            count = cursor.fetchone()[0]
-            if count == 0:
-                # 插入默认管理员用户
-                cursor.execute(
-                    'INSERT INTO users (user_id, username, password, role, permissions) VALUES (?, ?, ?, ?, ?)',
-                    ('admin', 'admin', 'admin123', 'admin', '["read", "write", "delete", "manage_users"]')
-                )
-                # 插入默认普通用户
-                cursor.execute(
-                    'INSERT INTO users (user_id, username, password, role, permissions) VALUES (?, ?, ?, ?, ?)',
-                    ('zpaskt', 'zpaskt', 'user123', 'user', '["read", "write"]')
-                )
-                conn.commit()
+            with conn.cursor() as cursor:
+                # 创建用户表
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS users (
+                        user_id VARCHAR(255) PRIMARY KEY,
+                        username VARCHAR(255) UNIQUE NOT NULL,
+                        password VARCHAR(255) NOT NULL,
+                        role VARCHAR(50) DEFAULT 'user',
+                        permissions TEXT DEFAULT '["read"]',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                ''')
+                
+                # 检查是否存在默认用户，不存在则创建
+                cursor.execute('SELECT COUNT(*) as count FROM users')
+                result = cursor.fetchone()
+                count = result['count'] if result else 0
+                
+                if count == 0:
+                    # 插入默认管理员用户
+                    cursor.execute(
+                        'INSERT INTO users (user_id, username, password, role, permissions) VALUES (%s, %s, %s, %s, %s)',
+                        ('admin', 'admin', 'admin123', 'admin', '["read", "write", "delete", "manage_users"]')
+                    )
+                    # 插入默认普通用户
+                    cursor.execute(
+                        'INSERT INTO users (user_id, username, password, role, permissions) VALUES (%s, %s, %s, %s, %s)',
+                        ('zpaskt', 'zpaskt', 'user123', 'user', '["read", "write"]')
+                    )
         finally:
             conn.close()
     
@@ -80,30 +90,29 @@ class AuthService:
         """
         conn = self._get_connection()
         try:
-            cursor = conn.cursor()
-            cursor.execute(
-                'SELECT user_id, username, password, role, permissions FROM users WHERE username = ?',
-                (username,)
-            )
-            user = cursor.fetchone()
-            
-            if not user:
-                return None
-            
-            # 验证明文密码
-            if user['password'] != password:
-                return None
-            
-            # 解析权限JSON字符串为列表
-            import json
-            permissions = json.loads(user['permissions'])
-            
-            return {
-                "user_id": user['user_id'],
-                "username": user['username'],
-                "role": user['role'],
-                "permissions": permissions
-            }
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    'SELECT user_id, username, password, role, permissions FROM users WHERE username = %s',
+                    (username,)
+                )
+                user = cursor.fetchone()
+                
+                if not user:
+                    return None
+                
+                # 验证明文密码
+                if user['password'] != password:
+                    return None
+                
+                # 解析权限JSON字符串为列表
+                permissions = json.loads(user['permissions'])
+                
+                return {
+                    "user_id": user['user_id'],
+                    "username": user['username'],
+                    "role": user['role'],
+                    "permissions": permissions
+                }
         finally:
             conn.close()
     
@@ -160,15 +169,14 @@ class AuthService:
         """
         conn = self._get_connection()
         try:
-            cursor = conn.cursor()
-            cursor.execute('SELECT permissions FROM users WHERE user_id = ?', (user_id,))
-            user = cursor.fetchone()
-            
-            if not user:
-                return []
-            
-            import json
-            return json.loads(user['permissions'])
+            with conn.cursor() as cursor:
+                cursor.execute('SELECT permissions FROM users WHERE user_id = %s', (user_id,))
+                user = cursor.fetchone()
+                
+                if not user:
+                    return []
+                
+                return json.loads(user['permissions'])
         finally:
             conn.close()
     
@@ -214,10 +222,10 @@ class AuthService:
         """
         conn = self._get_connection()
         try:
-            cursor = conn.cursor()
-            cursor.execute('SELECT role FROM users WHERE user_id = ?', (user_id,))
-            user = cursor.fetchone()
-            return user['role'] if user else None
+            with conn.cursor() as cursor:
+                cursor.execute('SELECT role FROM users WHERE user_id = %s', (user_id,))
+                user = cursor.fetchone()
+                return user['role'] if user else None
         finally:
             conn.close()
     
@@ -261,23 +269,20 @@ class AuthService:
         :param password: 密码（明文存储）
         :param role: 角色
         """
-        import json
         conn = self._get_connection()
         try:
-            cursor = conn.cursor()
-            
-            # 检查用户是否已存在
-            cursor.execute('SELECT user_id FROM users WHERE user_id = ? OR username = ?', (user_id, username))
-            if cursor.fetchone():
-                raise ValueError(f"用户 {user_id} 或用户名 {username} 已存在")
-            
-            permissions = json.dumps(self._get_default_permissions(role))
-            cursor.execute(
-                'INSERT INTO users (user_id, username, password, role, permissions) VALUES (?, ?, ?, ?, ?)',
-                (user_id, username, password, role, permissions)
-            )
-            conn.commit()
-        except sqlite3.IntegrityError:
+            with conn.cursor() as cursor:
+                # 检查用户是否已存在
+                cursor.execute('SELECT user_id FROM users WHERE user_id = %s OR username = %s', (user_id, username))
+                if cursor.fetchone():
+                    raise ValueError(f"用户 {user_id} 或用户名 {username} 已存在")
+                
+                permissions = json.dumps(self._get_default_permissions(role))
+                cursor.execute(
+                    'INSERT INTO users (user_id, username, password, role, permissions) VALUES (%s, %s, %s, %s, %s)',
+                    (user_id, username, password, role, permissions)
+                )
+        except pymysql.err.IntegrityError:
             raise ValueError(f"用户 {user_id} 或用户名 {username} 已存在")
         finally:
             conn.close()
@@ -304,9 +309,8 @@ class AuthService:
         """
         conn = self._get_connection()
         try:
-            cursor = conn.cursor()
-            cursor.execute('DELETE FROM users WHERE user_id = ?', (user_id,))
-            conn.commit()
+            with conn.cursor() as cursor:
+                cursor.execute('DELETE FROM users WHERE user_id = %s', (user_id,))
         finally:
             conn.close()
     
@@ -319,13 +323,12 @@ class AuthService:
         """
         conn = self._get_connection()
         try:
-            cursor = conn.cursor()
-            cursor.execute(
-                'UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
-                (new_password, user_id)
-            )
-            conn.commit()
-            return cursor.rowcount > 0
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    'UPDATE users SET password = %s, updated_at = CURRENT_TIMESTAMP WHERE user_id = %s',
+                    (new_password, user_id)
+                )
+                return cursor.rowcount > 0
         finally:
             conn.close()
     
@@ -336,38 +339,35 @@ class AuthService:
         :param user_id: 用户 ID
         :param new_role: 新角色
         """
-        import json
         conn = self._get_connection()
         try:
-            cursor = conn.cursor()
-            
-            # 先检查用户是否存在
-            cursor.execute('SELECT role, permissions FROM users WHERE user_id = ?', (user_id,))
-            existing_user = cursor.fetchone()
-            if not existing_user:
-                return False
-            
-            # 根据新角色获取权限列表
-            new_permissions = self._get_default_permissions(new_role)
-            # 将权限列表转换为JSON字符串
-            permissions_json = json.dumps(new_permissions, ensure_ascii=False)
-            
-            print(f"DEBUG: 更新角色 | 用户: {user_id} | 旧角色: {existing_user['role']} | 新角色: {new_role}")
-            print(f"DEBUG: 旧权限: {existing_user['permissions']} | 新权限: {permissions_json}")
-            
-            # 更新角色和权限
-            cursor.execute(
-                'UPDATE users SET role = ?, permissions = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
-                (new_role, permissions_json, user_id)
-            )
-            conn.commit()
-            
-            # 验证更新是否成功
-            cursor.execute('SELECT role, permissions FROM users WHERE user_id = ?', (user_id,))
-            updated_user = cursor.fetchone()
-            print(f"DEBUG: 更新后 | 角色: {updated_user['role']} | 权限: {updated_user['permissions']}")
-            
-            return cursor.rowcount > 0
+            with conn.cursor() as cursor:
+                # 先检查用户是否存在
+                cursor.execute('SELECT role, permissions FROM users WHERE user_id = %s', (user_id,))
+                existing_user = cursor.fetchone()
+                if not existing_user:
+                    return False
+                
+                # 根据新角色获取权限列表
+                new_permissions = self._get_default_permissions(new_role)
+                # 将权限列表转换为JSON字符串
+                permissions_json = json.dumps(new_permissions, ensure_ascii=False)
+                
+                print(f"DEBUG: 更新角色 | 用户: {user_id} | 旧角色: {existing_user['role']} | 新角色: {new_role}")
+                print(f"DEBUG: 旧权限: {existing_user['permissions']} | 新权限: {permissions_json}")
+                
+                # 更新角色和权限
+                cursor.execute(
+                    'UPDATE users SET role = %s, permissions = %s, updated_at = CURRENT_TIMESTAMP WHERE user_id = %s',
+                    (new_role, permissions_json, user_id)
+                )
+                
+                # 验证更新是否成功
+                cursor.execute('SELECT role, permissions FROM users WHERE user_id = %s', (user_id,))
+                updated_user = cursor.fetchone()
+                print(f"DEBUG: 更新后 | 角色: {updated_user['role']} | 权限: {updated_user['permissions']}")
+                
+                return cursor.rowcount > 0
         finally:
             conn.close()
     
@@ -378,27 +378,26 @@ class AuthService:
         :param user_id: 用户 ID
         :return: 用户信息
         """
-        import json
         conn = self._get_connection()
         try:
-            cursor = conn.cursor()
-            cursor.execute(
-                'SELECT user_id, username, role, permissions, created_at, updated_at FROM users WHERE user_id = ?',
-                (user_id,)
-            )
-            user = cursor.fetchone()
-            
-            if not user:
-                return None
-            
-            return {
-                "user_id": user['user_id'],
-                "username": user['username'],
-                "role": user['role'],
-                "permissions": json.loads(user['permissions']),
-                "created_at": user['created_at'],
-                "updated_at": user['updated_at']
-            }
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    'SELECT user_id, username, role, permissions, created_at, updated_at FROM users WHERE user_id = %s',
+                    (user_id,)
+                )
+                user = cursor.fetchone()
+                
+                if not user:
+                    return None
+                
+                return {
+                    "user_id": user['user_id'],
+                    "username": user['username'],
+                    "role": user['role'],
+                    "permissions": json.loads(user['permissions']),
+                    "created_at": user['created_at'].strftime('%Y-%m-%d %H:%M:%S') if isinstance(user['created_at'], datetime) else str(user['created_at']),
+                    "updated_at": user['updated_at'].strftime('%Y-%m-%d %H:%M:%S') if isinstance(user['updated_at'], datetime) else str(user['updated_at'])
+                }
         finally:
             conn.close()
     
@@ -408,26 +407,25 @@ class AuthService:
         
         :return: 用户列表
         """
-        import json
         conn = self._get_connection()
         try:
-            cursor = conn.cursor()
-            cursor.execute(
-                'SELECT user_id, username, role, permissions, created_at, updated_at FROM users'
-            )
-            users = cursor.fetchall()
-            
-            return [
-                {
-                    "user_id": user['user_id'],
-                    "username": user['username'],
-                    "role": user['role'],
-                    "permissions": json.loads(user['permissions']),
-                    "created_at": user['created_at'],
-                    "updated_at": user['updated_at']
-                }
-                for user in users
-            ]
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    'SELECT user_id, username, role, permissions, created_at, updated_at FROM users'
+                )
+                users = cursor.fetchall()
+                
+                return [
+                    {
+                        "user_id": user['user_id'],
+                        "username": user['username'],
+                        "role": user['role'],
+                        "permissions": json.loads(user['permissions']),
+                        "created_at": user['created_at'].strftime('%Y-%m-%d %H:%M:%S') if isinstance(user['created_at'], datetime) else str(user['created_at']),
+                        "updated_at": user['updated_at'].strftime('%Y-%m-%d %H:%M:%S') if isinstance(user['updated_at'], datetime) else str(user['updated_at'])
+                    }
+                    for user in users
+                ]
         finally:
             conn.close()
 

@@ -34,6 +34,14 @@ class Settings(BaseSettings):
     # ========== Checkpointer 数据库配置 ==========
     CHECKPOINTER_DB_PATH: str = "./data/checkpointer.db"  # SQLite 数据库路径
     
+    # ========== MySQL 数据库配置 ==========
+    MYSQL_HOST: str = "localhost"
+    MYSQL_PORT: int = 3306
+    MYSQL_USER: str = "root"
+    MYSQL_PASSWORD: str = ""
+    MYSQL_DATABASE: str = "rag"
+    MYSQL_POOL_SIZE: int = 5
+    
     # ========== 文本分割配置 ==========
     CHUNK_SIZE: int = 500
     CHUNK_OVERLAP: int = 50
