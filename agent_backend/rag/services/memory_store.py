@@ -5,8 +5,8 @@
 import json
 from typing import Dict, List, Optional
 from datetime import datetime
-import pymysql
-from pymysql.cursors import DictCursor
+import psycopg
+from psycopg import rows
 from models.schemas import Message
 from config.settings import settings
 
@@ -22,16 +22,13 @@ class MemoryStore:
         """
         self.max_short_term_memory = max_short_term_memory
         
-        # MySQL 数据库配置
+        # PostgreSQL 数据库配置
         self.db_config = {
-            'host': settings.MYSQL_HOST,
-            'port': settings.MYSQL_PORT,
-            'user': settings.MYSQL_USER,
-            'password': settings.MYSQL_PASSWORD,
-            'database': settings.MYSQL_DATABASE,
-            'charset': 'utf8mb4',
-            'cursorclass': DictCursor,
-            'autocommit': True
+            'host': settings.POSTGRES_HOST,
+            'port': settings.POSTGRES_PORT,
+            'user': settings.POSTGRES_USER,
+            'password': settings.POSTGRES_PASSWORD,
+            'dbname': settings.POSTGRES_DATABASE
         }
         
         # 初始化数据库表
@@ -43,44 +40,49 @@ class MemoryStore:
         # 长期记忆缓存
         self.long_term_cache: Dict[str, List[Dict]] = {}
     
-    def _get_connection(self) -> pymysql.Connection:
+    def _get_connection(self):
         """获取数据库连接"""
-        return pymysql.connect(**self.db_config)
+        conn = psycopg.connect(**self.db_config, autocommit=True)
+        return conn
     
     def _init_database(self):
         """初始化数据库表结构"""
         conn = self._get_connection()
         try:
-            with conn.cursor() as cursor:
+            with conn.cursor(row_factory=rows.dict_row) as cursor:
                 # 创建短期记忆表
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS short_term_memories (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        id SERIAL PRIMARY KEY,
                         session_id VARCHAR(255) NOT NULL,
                         message_id VARCHAR(255) NOT NULL,
                         role VARCHAR(50) NOT NULL,
                         content TEXT NOT NULL,
                         metadata TEXT,
-                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        INDEX idx_session_id (session_id),
-                        INDEX idx_timestamp (timestamp)
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
                 ''')
+                
+                # 创建索引
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_stm_session ON short_term_memories(session_id)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_stm_timestamp ON short_term_memories(timestamp)')
                 
                 # 创建长期记忆表
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS long_term_memories (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        id SERIAL PRIMARY KEY,
                         session_id VARCHAR(255) NOT NULL,
                         content TEXT NOT NULL,
                         category VARCHAR(100) DEFAULT 'general',
                         importance FLOAT DEFAULT 0.5,
-                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        INDEX idx_session_id (session_id),
-                        INDEX idx_category (category),
-                        INDEX idx_importance (importance)
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
                 ''')
+                
+                # 创建索引
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_ltm_session ON long_term_memories(session_id)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_ltm_category ON long_term_memories(category)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_ltm_importance ON long_term_memories(importance)')
         finally:
             conn.close()
     
@@ -111,7 +113,7 @@ class MemoryStore:
         # 存入数据库
         conn = self._get_connection()
         try:
-            with conn.cursor() as cursor:
+            with conn.cursor(row_factory=rows.dict_row) as cursor:
                 cursor.execute(
                     'INSERT INTO short_term_memories (session_id, message_id, role, content, metadata) VALUES (%s, %s, %s, %s, %s)',
                     (session_id, message.message_id, role, content, json.dumps(metadata or {}, ensure_ascii=False))
@@ -128,8 +130,8 @@ class MemoryStore:
                 if count > self.max_short_term_memory:
                     delete_count = count - self.max_short_term_memory
                     cursor.execute(
-                        'DELETE FROM short_term_memories WHERE session_id = %s ORDER BY timestamp ASC LIMIT %s',
-                        (session_id, delete_count)
+                        'DELETE FROM short_term_memories WHERE session_id = %s AND id IN (SELECT id FROM short_term_memories WHERE session_id = %s ORDER BY timestamp ASC LIMIT %s)',
+                        (session_id, session_id, delete_count)
                     )
         finally:
             conn.close()
@@ -160,7 +162,7 @@ class MemoryStore:
         # 缓存未命中，从数据库加载
         conn = self._get_connection()
         try:
-            with conn.cursor() as cursor:
+            with conn.cursor(row_factory=rows.dict_row) as cursor:
                 cursor.execute(
                     'SELECT role, content FROM short_term_memories WHERE session_id = %s ORDER BY timestamp ASC LIMIT %s',
                     (session_id, self.max_short_term_memory)
@@ -212,7 +214,7 @@ class MemoryStore:
         # 存入数据库
         conn = self._get_connection()
         try:
-            with conn.cursor() as cursor:
+            with conn.cursor(row_factory=rows.dict_row) as cursor:
                 cursor.execute(
                     'INSERT INTO long_term_memories (session_id, content, category, importance) VALUES (%s, %s, %s, %s)',
                     (session_id, content, category, importance)
@@ -247,7 +249,7 @@ class MemoryStore:
         # 缓存未命中，从数据库加载
         conn = self._get_connection()
         try:
-            with conn.cursor() as cursor:
+            with conn.cursor(row_factory=rows.dict_row) as cursor:
                 if category:
                     cursor.execute(
                         'SELECT content, category, importance, timestamp FROM long_term_memories WHERE session_id = %s AND category = %s ORDER BY timestamp DESC',
@@ -288,7 +290,7 @@ class MemoryStore:
         # 删除数据库记录
         conn = self._get_connection()
         try:
-            with conn.cursor() as cursor:
+            with conn.cursor(row_factory=rows.dict_row) as cursor:
                 cursor.execute('DELETE FROM short_term_memories WHERE session_id = %s', (session_id,))
         finally:
             conn.close()
@@ -312,7 +314,7 @@ class MemoryStore:
         # 从数据库搜索
         conn = self._get_connection()
         try:
-            with conn.cursor() as cursor:
+            with conn.cursor(row_factory=rows.dict_row) as cursor:
                 cursor.execute(
                     'SELECT content, category, importance, timestamp FROM long_term_memories WHERE session_id = %s AND content LIKE %s ORDER BY importance DESC',
                     (session_id, f'%{query}%')

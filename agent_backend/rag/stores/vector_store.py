@@ -9,6 +9,7 @@ from langchain_community.embeddings import DashScopeEmbeddings
 from langchain_ollama import OllamaEmbeddings
 from langchain_core.documents import Document
 from config.settings import settings
+import chromadb
 
 
 class VectorStoreService:
@@ -16,10 +17,6 @@ class VectorStoreService:
     
     def __init__(self):
         """初始化向量存储服务"""
-        # 确保持久化目录存在
-        persist_dir = settings.CHROMA_PERSIST_DIR
-        os.makedirs(persist_dir, exist_ok=True)
-        
         # 根据配置选择嵌入模型
         if settings.MODEL_PROVIDER == "ollama":
             self.embeddings = OllamaEmbeddings(
@@ -32,12 +29,27 @@ class VectorStoreService:
                 dashscope_api_key=settings.DASHSCOPE_API_KEY
             )
         
-        # 初始化 Chroma 向量库
-        self.vectorstore = Chroma(
-            collection_name=settings.COLLECTION_NAME,
-            persist_directory=persist_dir,
-            embedding_function=self.embeddings
-        )
+        # 根据配置选择 Chroma 连接方式
+        if settings.CHROMA_USE_HTTP:
+            # HTTP 客户端模式（远程服务器）
+            chroma_client = chromadb.HttpClient(
+                host=settings.CHROMA_HOST,
+                port=settings.CHROMA_PORT
+            )
+            self.vectorstore = Chroma(
+                client=chroma_client,
+                collection_name=settings.COLLECTION_NAME,
+                embedding_function=self.embeddings
+            )
+        else:
+            # 本地文件模式
+            persist_dir = settings.CHROMA_PERSIST_DIR
+            os.makedirs(persist_dir, exist_ok=True)
+            self.vectorstore = Chroma(
+                collection_name=settings.COLLECTION_NAME,
+                persist_directory=persist_dir,
+                embedding_function=self.embeddings
+            )
     
     def add_texts(
         self,

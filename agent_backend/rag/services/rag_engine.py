@@ -10,7 +10,7 @@ from langchain.agents import create_agent, AgentState
 from langchain.agents.middleware import wrap_tool_call, before_agent, after_agent
 from langchain_community.chat_models import ChatTongyi
 from langchain_ollama import ChatOllama, OllamaEmbeddings
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.prebuilt import create_react_agent
 from langchain_core.tools import tool
 from config.settings import settings
@@ -18,9 +18,6 @@ from stores.vector_store import VectorStoreService
 from tools.retrieval import create_search_knowledge_base_tool
 from tools.model_adapter import MODEL_ADAPTER_TOOLS
 from langgraph.runtime import Runtime
-
-import sqlite3
-import os
 
 # 获取日志记录器
 logger = logging.getLogger(__name__)
@@ -97,7 +94,7 @@ class RAGEngine:
 3. **引用来源**：在回答时，尽量提及信息的来源文档标题。
 4. **诚实原则**：如果问题与知识库内容无关，也请诚实告知用户你目前仅能回答知识库范围内的问题。"""
         
-        # 初始化 Checkpointer (使用 SQLite)
+        # 初始化 Checkpointer (使用 PostgreSQL)
         self.checkpointer = self._init_checkpointer()
         
         # 创建 Agent（传入 middleware）
@@ -105,17 +102,24 @@ class RAGEngine:
     
     def _init_checkpointer(self):
         """
-        初始化 SQLite Checkpointer
+        初始化 PostgreSQL Checkpointer
             
-        :return: SqliteSaver 实例
+        :return: PostgresSaver 实例
         """
-        # 确保数据目录存在
-        db_dir = os.path.dirname(settings.CHECKPOINTER_DB_PATH)
-        os.makedirs(db_dir, exist_ok=True)
-            
         # 创建并返回 checkpointer
-        conn = sqlite3.connect(settings.CHECKPOINTER_DB_PATH, check_same_thread=False)
-        checkpointer = SqliteSaver(conn)
+        import psycopg
+        conn = psycopg.connect(
+            host=settings.POSTGRES_HOST,
+            port=settings.POSTGRES_PORT,
+            user=settings.POSTGRES_USER,
+            password=settings.POSTGRES_PASSWORD,
+            dbname=settings.POSTGRES_DATABASE,
+            autocommit=True
+        )
+        checkpointer = PostgresSaver(conn)
+        
+        # 创建所需的表结构
+        checkpointer.setup()
             
         return checkpointer
         

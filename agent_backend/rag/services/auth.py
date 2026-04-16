@@ -7,8 +7,8 @@ import json
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List
 from jose import jwt, JWTError
-import pymysql
-from pymysql.cursors import DictCursor
+import psycopg
+from psycopg import rows
 from config.settings import settings
 
 
@@ -21,16 +21,13 @@ class AuthService:
         self.algorithm = settings.JWT_ALGORITHM
         self.access_token_expire_minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
         
-        # MySQL 数据库配置
+        # PostgreSQL 数据库配置
         self.db_config = {
-            'host': settings.MYSQL_HOST,
-            'port': settings.MYSQL_PORT,
-            'user': settings.MYSQL_USER,
-            'password': settings.MYSQL_PASSWORD,
-            'database': settings.MYSQL_DATABASE,
-            'charset': 'utf8mb4',
-            'cursorclass': DictCursor,
-            'autocommit': True
+            'host': settings.POSTGRES_HOST,
+            'port': settings.POSTGRES_PORT,
+            'user': settings.POSTGRES_USER,
+            'password': settings.POSTGRES_PASSWORD,
+            'dbname': settings.POSTGRES_DATABASE
         }
         
         # 初始化数据库
@@ -39,15 +36,16 @@ class AuthService:
         # Token 黑名单
         self.token_blacklist: set = set()
     
-    def _get_connection(self) -> pymysql.Connection:
+    def _get_connection(self):
         """获取数据库连接"""
-        return pymysql.connect(**self.db_config)
+        conn = psycopg.connect(**self.db_config, autocommit=True)
+        return conn
     
     def _init_database(self):
         """初始化数据库表结构"""
         conn = self._get_connection()
         try:
-            with conn.cursor() as cursor:
+            with conn.cursor(row_factory=rows.dict_row) as cursor:
                 # 创建用户表
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS users (
@@ -55,14 +53,14 @@ class AuthService:
                         username VARCHAR(255) UNIQUE NOT NULL,
                         password VARCHAR(255) NOT NULL,
                         role VARCHAR(50) DEFAULT 'user',
-                        permissions TEXT DEFAULT '["read"]',
+                        permissions TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
                 ''')
                 
                 # 检查是否存在默认用户，不存在则创建
-                cursor.execute('SELECT COUNT(*) as count FROM users')
+                cursor.execute('SELECT COUNT(*) FROM users')
                 result = cursor.fetchone()
                 count = result['count'] if result else 0
                 
@@ -77,6 +75,7 @@ class AuthService:
                         'INSERT INTO users (user_id, username, password, role, permissions) VALUES (%s, %s, %s, %s, %s)',
                         ('zpaskt', 'zpaskt', 'user123', 'user', '["read", "write"]')
                     )
+                    conn.commit()
         finally:
             conn.close()
     
@@ -90,7 +89,7 @@ class AuthService:
         """
         conn = self._get_connection()
         try:
-            with conn.cursor() as cursor:
+            with conn.cursor(row_factory=rows.dict_row) as cursor:
                 cursor.execute(
                     'SELECT user_id, username, password, role, permissions FROM users WHERE username = %s',
                     (username,)
@@ -169,7 +168,7 @@ class AuthService:
         """
         conn = self._get_connection()
         try:
-            with conn.cursor() as cursor:
+            with conn.cursor(row_factory=rows.dict_row) as cursor:
                 cursor.execute('SELECT permissions FROM users WHERE user_id = %s', (user_id,))
                 user = cursor.fetchone()
                 
@@ -222,7 +221,7 @@ class AuthService:
         """
         conn = self._get_connection()
         try:
-            with conn.cursor() as cursor:
+            with conn.cursor(row_factory=rows.dict_row) as cursor:
                 cursor.execute('SELECT role FROM users WHERE user_id = %s', (user_id,))
                 user = cursor.fetchone()
                 return user['role'] if user else None
@@ -271,18 +270,18 @@ class AuthService:
         """
         conn = self._get_connection()
         try:
-            with conn.cursor() as cursor:
+            with conn.cursor(row_factory=rows.dict_row) as cursor:
                 # 检查用户是否已存在
                 cursor.execute('SELECT user_id FROM users WHERE user_id = %s OR username = %s', (user_id, username))
                 if cursor.fetchone():
                     raise ValueError(f"用户 {user_id} 或用户名 {username} 已存在")
                 
-                permissions = json.dumps(self._get_default_permissions(role))
+                permissions = json.dumps(self._get_default_permissions(role), ensure_ascii=False)
                 cursor.execute(
                     'INSERT INTO users (user_id, username, password, role, permissions) VALUES (%s, %s, %s, %s, %s)',
                     (user_id, username, password, role, permissions)
                 )
-        except pymysql.err.IntegrityError:
+        except psycopg.errors.UniqueViolation:
             raise ValueError(f"用户 {user_id} 或用户名 {username} 已存在")
         finally:
             conn.close()
@@ -341,7 +340,7 @@ class AuthService:
         """
         conn = self._get_connection()
         try:
-            with conn.cursor() as cursor:
+            with conn.cursor(row_factory=rows.dict_row) as cursor:
                 # 先检查用户是否存在
                 cursor.execute('SELECT role, permissions FROM users WHERE user_id = %s', (user_id,))
                 existing_user = cursor.fetchone()
@@ -380,7 +379,7 @@ class AuthService:
         """
         conn = self._get_connection()
         try:
-            with conn.cursor() as cursor:
+            with conn.cursor(row_factory=rows.dict_row) as cursor:
                 cursor.execute(
                     'SELECT user_id, username, role, permissions, created_at, updated_at FROM users WHERE user_id = %s',
                     (user_id,)
@@ -409,7 +408,7 @@ class AuthService:
         """
         conn = self._get_connection()
         try:
-            with conn.cursor() as cursor:
+            with conn.cursor(row_factory=rows.dict_row) as cursor:
                 cursor.execute(
                     'SELECT user_id, username, role, permissions, created_at, updated_at FROM users'
                 )

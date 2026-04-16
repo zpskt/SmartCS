@@ -8,12 +8,10 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain.agents.middleware import wrap_tool_call
 from langchain_community.chat_models import ChatTongyi
 from langchain_ollama import ChatOllama
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.prebuilt import create_react_agent
 from config.settings import settings
 from tools.model_adapter import MODEL_ADAPTER_TOOLS
-import sqlite3
-import os
 
 # 获取日志记录器
 logger = logging.getLogger(__name__)
@@ -92,21 +90,28 @@ class ModelAdapterEngine:
 
 当用户询问时,优先使用最合适的工具获取信息,然后组织成易读的格式返回。"""
         
-        # 初始化 Checkpointer (使用 SQLite)
+        # 初始化 Checkpointer (使用 PostgreSQL)
         self.checkpointer = self._init_checkpointer()
         
         # 创建 Agent（传入 middleware）
         self.agent = self._create_agent()
     
     def _init_checkpointer(self):
-        """初始化 SQLite Checkpointer"""
-        db_dir = os.path.dirname(settings.CHECKPOINTER_DB_PATH)
-        os.makedirs(db_dir, exist_ok=True)
+        """初始化 PostgreSQL Checkpointer"""
+        # 创建并返回 checkpointer
+        import psycopg
+        conn = psycopg.connect(
+            host=settings.POSTGRES_HOST,
+            port=settings.POSTGRES_PORT,
+            user=settings.POSTGRES_USER,
+            password=settings.POSTGRES_PASSWORD,
+            dbname=settings.POSTGRES_DATABASE,
+            autocommit=True
+        )
+        checkpointer = PostgresSaver(conn)
         
-        # 使用独立的数据库文件存储型号适配会话
-        db_path = os.path.join(db_dir, "model_adapter_checkpointer.db")
-        conn = sqlite3.connect(db_path, check_same_thread=False)
-        checkpointer = SqliteSaver(conn)
+        # 创建所需的表结构
+        checkpointer.setup()
         
         return checkpointer
     

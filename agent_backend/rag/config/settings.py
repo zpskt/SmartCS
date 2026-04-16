@@ -31,16 +31,21 @@ class Settings(BaseSettings):
     CHROMA_PERSIST_DIR: str = "./data/chroma_db"
     COLLECTION_NAME: str = "knowledge_base"
     
-    # ========== Checkpointer 数据库配置 ==========
-    CHECKPOINTER_DB_PATH: str = "./data/checkpointer.db"  # SQLite 数据库路径
+    # Chroma 远程服务器配置
+    CHROMA_HOST: str = "localhost"
+    CHROMA_PORT: int = 8000
+    CHROMA_USE_HTTP: bool = True  # True=HTTP客户端模式, False=本地文件模式
     
-    # ========== MySQL 数据库配置 ==========
-    MYSQL_HOST: str = "localhost"
-    MYSQL_PORT: int = 3306
-    MYSQL_USER: str = "root"
-    MYSQL_PASSWORD: str = ""
-    MYSQL_DATABASE: str = "rag"
-    MYSQL_POOL_SIZE: int = 5
+    # ========== PostgreSQL 数据库配置 ==========
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = "zhangpeng"
+    POSTGRES_DATABASE: str = "rag"
+    POSTGRES_POOL_SIZE: int = 5
+    
+    # Checkpointer 连接字符串（用于 LangGraph）
+    POSTGRES_CHECKPOINTER_URL: str = "postgresql://postgres:@localhost:5432/rag"
     
     # ========== 文本分割配置 ==========
     CHUNK_SIZE: int = 500

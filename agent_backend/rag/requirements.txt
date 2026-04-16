@@ -6,6 +6,7 @@ langchain-core>=0.1.0
 langchain-community>=0.0.10
 langchain-text-splitters>=0.0.1
 langgraph>=0.2.0
+langgraph-checkpoint-postgres>=0.0.1
 
 # 向量数据库
 langchain-chroma>=0.1.0
@@ -23,6 +24,9 @@ python-multipart>=0.0.6
 python-jose[cryptography]>=3.3.0
 passlib>=1.7.4
 bcrypt>=4.0.1
+
+# 数据库
+psycopg[binary]>=3.1.0
 
 # 飞书集成
 requests>=2.31.0
