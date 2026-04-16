@@ -48,6 +48,76 @@
       </div>
     </div>
 
+    <!-- 工具表单模态框 -->
+    <div v-if="showToolFormModal" class="modal-overlay" @click.self="closeToolFormModal">
+      <div class="modal tool-form-modal">
+        <div class="modal-header">
+          <h3>{{ currentToolSchema?.icon }} {{ currentToolSchema?.display_name }}</h3>
+          <button @click="closeToolFormModal" class="close-btn">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="tool-description">{{ currentToolSchema?.description }}</p>
+          
+          <div v-for="field in currentToolSchema?.fields" :key="field.name" class="form-group">
+            <label>
+              {{ field.label }}
+              <span v-if="field.required" class="required-mark">*</span>
+            </label>
+            
+            <!-- 文本输入 -->
+            <input 
+              v-if="field.type === 'text'"
+              v-model="toolFormData[field.name]" 
+              type="text" 
+              :placeholder="field.placeholder"
+              :required="field.required"
+            />
+            
+            <!-- 多行文本 -->
+            <textarea 
+              v-else-if="field.type === 'textarea'"
+              v-model="toolFormData[field.name]" 
+              :placeholder="field.placeholder"
+              :rows="field.rows || 3"
+              :required="field.required"
+            ></textarea>
+            
+            <!-- 下拉选择 -->
+            <select 
+              v-else-if="field.type === 'select'"
+              v-model="toolFormData[field.name]"
+              :required="field.required"
+            >
+              <option value="" disabled>请选择</option>
+              <option 
+                v-for="option in field.options" 
+                :key="String(option.value)"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+            
+            <!-- 数字输入 -->
+            <input 
+              v-else-if="field.type === 'number'"
+              v-model.number="toolFormData[field.name]" 
+              type="number"
+              :placeholder="field.placeholder"
+              :required="field.required"
+            />
+            
+            <!-- 帮助文本 -->
+            <p v-if="field.help_text" class="help-text">{{ field.help_text }}</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button @click="closeToolFormModal" class="cancel-btn">取消</button>
+          <button @click="submitToolForm" class="submit-btn" :disabled="isSubmitting">{{ isSubmitting ? '执行中...' : '确定' }}</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 主聊天区域 -->
     <main class="chat-main">
       <!-- 消息列表 -->
@@ -128,7 +198,8 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick, watch } from 'vue'
 import { useChatStore } from '@/stores/chat'
-import { chatApi, sessionApi } from '@/api'
+import { chatApi, sessionApi, intentApi, toolApi } from '@/api'
+import type { ToolFormSchema } from '@/api'
 import { marked } from 'marked'
 import { WELCOME_MESSAGES, PRESET_QUESTIONS } from '@/config'
 
@@ -140,6 +211,12 @@ const sessions = ref<any[]>([])
 const currentSessionId = ref('')
 const showEditSessionModal = ref(false)
 const editSessionTitle = ref('')
+
+// 工具表单相关
+const showToolFormModal = ref(false)
+const currentToolSchema = ref<ToolFormSchema | null>(null)
+const toolFormData = ref<Record<string, any>>({})
+const isSubmitting = ref(false)
 
 onMounted(async () => {
   await loadSessions()
@@ -267,6 +344,26 @@ async function sendMessage() {
   if (!inputMessage.value.trim() || chatStore.isLoading) return
 
   const message = inputMessage.value.trim()
+  console.log('📤 发送消息:', message)
+  
+  // 先进行意图识别
+  try {
+    console.log('🔍 开始意图识别...')
+    const intentResult = await intentApi.recognizeIntent({ message })
+    console.log('✅ 意图识别结果:', intentResult)
+    
+    // 如果识别为工具表单，显示表单
+    if (intentResult.intent_type === 'tool_form' && intentResult.form_schema) {
+      console.log('📋 显示工具表单')
+      showToolForm(message, intentResult.form_schema)
+      return
+    }
+    console.log('💬 进入普通聊天模式')
+  } catch (err) {
+    console.error('❌ 意图识别失败，直接进入聊天模式:', err)
+  }
+
+  // 普通聊天模式
   inputMessage.value = ''
 
   // 添加用户消息
@@ -373,6 +470,77 @@ function formatTime(timestamp: string) {
 function sendPresetQuestion(question: string) {
   inputMessage.value = question
   sendMessage()
+}
+
+// 显示工具表单
+function showToolForm(message: string, schema: ToolFormSchema) {
+  currentToolSchema.value = schema
+  toolFormData.value = {}
+  
+  // 设置默认值
+  schema.fields.forEach(field => {
+    if (field.default !== undefined) {
+      toolFormData.value[field.name] = field.default
+    }
+  })
+  
+  showToolFormModal.value = true
+  
+  // 在聊天中显示提示信息
+  chatStore.addMessage({
+    role: 'assistant',
+    content: `检测到您需要「${schema.display_name}」，已为您打开填写表单。`
+  })
+}
+
+// 关闭工具表单
+function closeToolFormModal() {
+  showToolFormModal.value = false
+  currentToolSchema.value = null
+  toolFormData.value = {}
+}
+
+// 提交工具表单
+async function submitToolForm() {
+  if (!currentToolSchema.value) return
+  
+  // 验证必填字段
+  for (const field of currentToolSchema.value.fields) {
+    if (field.required && !toolFormData.value[field.name]) {
+      alert(`请填写必填项：${field.label}`)
+      return
+    }
+  }
+  
+  isSubmitting.value = true
+  
+  try {
+    // 调用工具执行 API
+    const result = await toolApi.executeTool({
+      tool_name: currentToolSchema.value.tool_name,
+      parameters: toolFormData.value
+    })
+    
+    if (result.success) {
+      // 在聊天中显示结果
+      chatStore.addMessage({
+        role: 'assistant',
+        content: `✅ 工具执行成功！\n\n${result.result}`
+      })
+      
+      closeToolFormModal()
+    } else {
+      throw new Error(result.message || '工具执行失败')
+    }
+  } catch (err: any) {
+    console.error('工具执行失败:', err)
+    chatStore.addMessage({
+      role: 'assistant',
+      content: `❌ 工具执行失败：${err.message}`
+    })
+  } finally {
+    isSubmitting.value = false
+  }
 }
 </script>
 
@@ -782,6 +950,9 @@ function sendPresetQuestion(question: string) {
   border-radius: 8px;
   width: 90%;
   max-width: 400px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
 }
 
@@ -814,6 +985,8 @@ function sendPresetQuestion(question: string) {
 
 .modal-body {
   padding: 20px;
+  overflow-y: auto;
+  flex: 1;
 }
 
 .form-group {
@@ -880,5 +1053,71 @@ function sendPresetQuestion(question: string) {
 .submit-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* 工具表单样式 */
+.tool-form-modal {
+  max-width: 600px;
+}
+
+.tool-description {
+  margin-bottom: 20px;
+  padding: 12px;
+  background: #f5f5f5;
+  border-left: 4px solid #667eea;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #666;
+  line-height: 1.6;
+}
+
+.form-group label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.required-mark {
+  color: #f44336;
+  font-weight: bold;
+}
+
+.help-text {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #999;
+  line-height: 1.5;
+}
+
+.form-group textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.form-group textarea:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.form-group select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.form-group select:focus {
+  outline: none;
+  border-color: #667eea;
 }
 </style>

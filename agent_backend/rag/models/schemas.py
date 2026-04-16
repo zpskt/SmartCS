@@ -69,3 +69,25 @@ class ChatResponse(BaseModel):
     content: str
     sources: List[Dict[str, Any]] = []  # 参考来源
     timestamp: datetime = Field(default_factory=datetime.now)
+
+
+class ToolFormSchema(BaseModel):
+    """工具表单Schema"""
+    tool_name: str  # 工具名称
+    display_name: str  # 显示名称
+    description: str  # 工具描述
+    fields: List[Dict[str, Any]]  # 表单字段定义
+    
+
+class IntentRecognitionRequest(BaseModel):
+    """意图识别请求"""
+    message: str
+    
+
+class IntentRecognitionResponse(BaseModel):
+    """意图识别响应"""
+    intent_type: str  # "chat", "tool_form", "query"
+    tool_name: Optional[str] = None  # 如果需要表单，返回工具名称
+    form_schema: Optional[ToolFormSchema] = None  # 表单schema
+    confidence: float = 0.0  # 置信度
+    message: str = ""  # 提示信息

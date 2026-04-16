@@ -95,6 +95,52 @@ export interface UserCreateRequest {
   current_user_id: string
 }
 
+// 意图识别相关接口
+export interface IntentRecognitionRequest {
+  message: string
+}
+
+export interface FormField {
+  name: string
+  label: string
+  type: 'text' | 'textarea' | 'select' | 'number' | 'boolean'
+  placeholder?: string
+  required?: boolean
+  default?: any
+  options?: Array<{ label: string; value: any }>
+  help_text?: string
+  rows?: number
+}
+
+export interface ToolFormSchema {
+  tool_name: string
+  display_name: string
+  description: string
+  fields: FormField[]
+  category?: string
+  icon?: string
+}
+
+export interface IntentRecognitionResponse {
+  intent_type: 'chat' | 'tool_form' | 'query'
+  tool_name?: string
+  form_schema?: ToolFormSchema
+  confidence: number
+  message: string
+}
+
+export interface ExecuteToolRequest {
+  tool_name: string
+  parameters: Record<string, any>
+}
+
+export interface ExecuteToolResponse {
+  success: boolean
+  tool_name?: string
+  result?: any
+  message?: string
+}
+
 export const authApi = {
   login(data: LoginRequest): Promise<LoginResponse> {
     return apiClient.post('/auth/login', data)
@@ -357,5 +403,20 @@ export const userApi = {
   // 删除用户（仅 admin）
   deleteUser(userId: string) {
     return apiClient.post('/users/delete', { user_id: userId })
+  },
+}
+
+// 意图识别和工具执行 API
+export const intentApi = {
+  // 识别用户意图
+  recognizeIntent(data: IntentRecognitionRequest): Promise<IntentRecognitionResponse> {
+    return apiClient.post('/intent/recognize', data)
+  },
+}
+
+export const toolApi = {
+  // 执行工具
+  executeTool(data: ExecuteToolRequest): Promise<ExecuteToolResponse> {
+    return apiClient.post('/tools/execute', data)
   },
 }

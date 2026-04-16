@@ -14,7 +14,7 @@ from pydantic import BaseModel
 import logging
 
 from app import get_enterprise_rag_system
-from models.schemas import ChatRequest, ChatResponse
+from models.schemas import ChatRequest, ChatResponse, IntentRecognitionRequest, IntentRecognitionResponse
 from utils.logger import get_logger
 from utils.permissions import (
     require_roles,
@@ -169,6 +169,12 @@ class UserUpdateRequest(BaseModel):
 class UserDeleteRequest(BaseModel):
     """删除用户请求"""
     user_id: str
+
+
+class ExecuteToolRequest(BaseModel):
+    """执行工具请求"""
+    tool_name: str
+    parameters: Dict[str, Any]
 
 
 # ========== 认证依赖 ==========
@@ -726,6 +732,102 @@ async def health_check():
         "status": "healthy",
         "version": "1.0.0"
     }
+
+
+# ========== 意图识别和工具执行 ==========
+
+@app.post("/api/intent/recognize")
+async def recognize_intent(
+    request: IntentRecognitionRequest,
+    user_id: str = Depends(verify_token)
+):
+    """识别用户意图，判断是否需要展示表单"""
+    logger.info(f"🎯 意图识别 | 用户: {user_id} | 消息: {request.message[:100]}")
+    
+    try:
+        from services.intent_recognizer import get_intent_recognizer
+        
+        recognizer = get_intent_recognizer()
+        result = recognizer.recognize(request.message)
+        
+        logger.info(f"✅ 意图识别完成 | 类型: {result['intent_type']} | 置信度: {result['confidence']}")
+        
+        return result
+    except Exception as e:
+        logger.error(f"❌ 意图识别失败 | 错误: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"意图识别失败：{str(e)}")
+
+
+@app.post("/api/tools/execute")
+async def execute_tool(
+    request: ExecuteToolRequest,
+    user_id: str = Depends(require_write_permission())
+):
+    """执行工具（直接调用，不经过Agent）"""
+    logger.info(f"🔧 执行工具 | 用户: {user_id} | 工具: {request.tool_name}")
+    logger.debug(f"参数: {request.parameters}")
+    
+    try:
+        # 获取 RAG 系统
+        rag_system = get_enterprise_rag_system()
+        
+        # 根据工具名称找到对应的工具函数
+        tool_result = await _execute_tool_by_name(request.tool_name, request.parameters)
+        
+        if not tool_result["success"]:
+            logger.error(f"❌ 工具执行失败 | 原因: {tool_result['message']}")
+            raise HTTPException(status_code=400, detail=tool_result["message"])
+        
+        logger.info(f"✅ 工具执行成功")
+        return tool_result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ 工具执行失败 | 错误: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"工具执行失败：{str(e)}")
+
+
+async def _execute_tool_by_name(tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+    """根据工具名称执行对应的工具函数
+    
+    Args:
+        tool_name: 工具名称
+        parameters: 参数字典
+        
+    Returns:
+        执行结果
+    """
+    # 导入工具函数
+    from tools.model_adapter import generate_insert_sql
+    
+    # 工具映射表
+    tool_functions = {
+        "generate_insert_sql": generate_insert_sql,
+        # 可以添加更多工具
+    }
+    
+    # 查找工具函数
+    tool_func = tool_functions.get(tool_name)
+    if not tool_func:
+        return {
+            "success": False,
+            "message": f"未找到工具: {tool_name}"
+        }
+    
+    try:
+        # 调用工具函数
+        result = tool_func.invoke(parameters)
+        
+        return {
+            "success": True,
+            "tool_name": tool_name,
+            "result": result
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"工具执行失败: {str(e)}"
+        }
 
 
 # ========== 用户管理路由 ==========
